@@ -3,6 +3,65 @@ import pandas as pd
 from glob import glob
 from pathlib import Path
 
+from copy import deepcopy
+
+import hypergrad
+import adabound
+import torch
+
+
+def build_run_name():
+    # Gets two random nouns and an UUID for a human readable string name for a run.
+    import uuid
+    import random
+
+    # Assuming a predefined list of nouns for simplicity. In a real scenario, this could be replaced with a more dynamic method or larger dataset.
+    nouns = [
+        "tree",
+        "car",
+        "mountain",
+        "river",
+        "cloud",
+        "star",
+        "forest",
+        "beach",
+        "sun",
+        "moon",
+    ]
+
+    # Select two random nouns from the list
+    noun1 = random.choice(nouns)
+    noun2 = random.choice(nouns)
+
+    # Generate a UUID
+    unique_id = uuid.uuid4()
+    # Concatenate the nouns and UUID to form a unique, human-readable name
+    model_name = f"{noun1}-{noun2}-{unique_id}"
+
+    return model_name
+
+
+def build_optimizer_fn_from_config(optimizer_config):
+    optimizer_config = deepcopy(optimizer_config)
+    name = optimizer_config.pop(
+        "name"
+    )  # Remove name from config as the base constructors will not allow it
+    try:
+        optimizer_class = getattr(hypergrad, name)
+    except AttributeError:
+        try:
+            optimizer_class = getattr(adabound, name)
+        except AttributeError:
+            optimizer_class = getattr(
+                torch.optim,
+                name,
+            )
+
+    def optimizer_init(*args, **kwargs):
+        return optimizer_class(*args, **kwargs, **optimizer_config)
+
+    return optimizer_init
+
 
 def read_raw_sample(file, skiprows=2, sep=r"\s+"):
     # Read txt files using pandas

@@ -18,9 +18,22 @@ def plot_pointcloud(pointcloud, ax=None, plot_radius=True):
     return ax
 
 
-def plot_sample_figures(generator, discriminator, dataset, n=5, plot_radius=True):
+def plot_sample_figures(
+    generator,
+    discriminator,
+    dataset=None,
+    sample_y=None,
+    n=5,
+    plot_radius=True,
+    return_fig=False,
+):
     sample_generated_y = generator(dataset[:][0][0:n])
-    sample_y = dataset[:][1][0:n]
+
+    if sample_y is None:
+        try:
+            sample_y = dataset[:][1][0:n]
+        except TypeError:
+            raise ValueError("Either 'sample_y' or 'dataset' must be defined!")
 
     # Illustrate the point cloud
 
@@ -40,7 +53,10 @@ def plot_sample_figures(generator, discriminator, dataset, n=5, plot_radius=True
     ax[0].set_title("Real, discriminator pred: {:.2f}".format(real_preds[0].item()))
     ax[1].set_title("Generated, discriminator pred: {:.2f}".format(preds[0].item()))
 
-    plt.show()
+    if not return_fig:
+        plt.show()
+    else:
+        return fig
 
     # Plot distribution of the generated data
     # sns.histplot(sample_generated_y[0].detach().numpy()[:,0], bins="auto")

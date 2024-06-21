@@ -1,141 +1,374 @@
+import mlflow.experiments
 import torch
 from torch import nn
+from torch.utils.data import DataLoader
+from datetime import datetime
+from tqdm import tqdm
+import mlflow
+from matplotlib import pyplot as plt
 
 
-class Generator(nn.Module):
-    def __init__(self, z_dim=100, channels_img=3, features_g=64):
-        super(Generator, self).__init__()
-        self.gen = nn.Sequential(
-            self._block(z_dim, features_g * 16, 4, 1, 0),  # 4x4
-            self._block(features_g * 16, features_g * 8, 4, 2, 1),  # 8x8
-            self._block(features_g * 8, features_g * 4, 4, 2, 1),  # 16x16
-            self._block(features_g * 4, features_g * 2, 4, 2, 1),  # 32x32
-            nn.ConvTranspose2d(features_g * 2, channels_img, 4, 2, 1),  # 64x64
-            nn.Tanh(),
-        )
+from hypergrad import (
+    AdamHD,
+)  # This is a custom optimizer, you can use torch.optim.Adam instead
 
-    def _block(self, in_channels, out_channels, kernel_size, stride, padding):
-        return nn.Sequential(
-            nn.ConvTranspose2d(
-                in_channels, out_channels, kernel_size, stride, padding, bias=False
+from src.plotting import plot_pointcloud, plot_sample_figures
+from src.utils import build_optimizer_fn_from_config, build_run_name
+
+
+class HSGenerator(nn.Module):
+    def __init__(self, in_dim, latent_dim=27, output_max_samples=2000, cnn_channels=16):
+        super().__init__()
+        # Takes in the input descriptors and returns the output point cloud
+
+        assert latent_dim % 3 == 0, "Latent dim needs to be multiples of 3"
+
+        # TODO: Move these to config
+        # Maps descriptors to latent space
+        in_dim = 1  # We have a single descriptor
+
+        kernel_y = 64
+        cnn_layers = 3
+
+        latent_max_samples = (
+            output_max_samples + cnn_layers * kernel_y
+        )  # We will add some padding to the latent space
+        kernel_x = latent_dim // cnn_layers
+
+        # Takes in the input descriptors and returns the output point cloud
+
+        self.desc2latent = nn.Sequential(
+            # Input to latent space
+            nn.ConvTranspose1d(
+                in_dim,
+                latent_dim // 2,
+                kernel_size=latent_max_samples // 2,
+                stride=1,
+                padding=0,
+                bias=True,
             ),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(),
+            nn.ConvTranspose1d(
+                latent_dim // 2,
+                latent_dim,
+                kernel_size=latent_max_samples // 2 - 1,
+                stride=1,
+                padding=0,
+                bias=True,
+            ),
         )
 
-    def forward(self, x):
-        return self.gen(x)
+        self.latent2pointcloud = nn.Sequential(
+            nn.Conv2d(
+                1,
+                cnn_channels,
+                kernel_size=(kernel_y + 1, kernel_x),
+                stride=1,
+                padding=0,
+                bias=True,
+            ),
+            nn.BatchNorm2d(cnn_channels),
+            nn.LeakyReLU(0.2),
+            nn.Conv2d(
+                cnn_channels,
+                cnn_channels,
+                kernel_size=(kernel_y + 1, kernel_x),
+                stride=1,
+                padding=0,
+                bias=True,
+            ),
+            nn.BatchNorm2d(cnn_channels),
+            nn.LeakyReLU(0.2),
+            nn.Conv2d(
+                cnn_channels,
+                1,
+                kernel_size=(kernel_y + 1, kernel_x),
+                stride=1,
+                padding=0,
+                bias=True,
+            ),
+        )
+
+        self.in_dim = in_dim
+        self.latent_dim = latent_dim
+        self.output_max_samples = output_max_samples
+        self.latent_max_samples = latent_max_samples
+        self.latent_dim = latent_dim
+
+    def get_z(self, batch_size):
+        return torch.rand(batch_size, self.latent_max_samples, self.latent_dim)
+
+    def forward(self, d: torch.tensor):
+
+        # Input d: Batch x Descriptors x 1 # TODO: In the future a single descriptor will be a 1D tensor, changing dimensions to Batch x Descriptors x NFeatures
+        # Output: Batch x Samples x 4 (class, x, y, r)
+        batch_size = d.shape[0]
+
+        z = self.get_z(batch_size)
+
+        x = d
+        x = (self.desc2latent(x).transpose(-1, -2) + z) / 2
+        x = self.latent2pointcloud(x.unsqueeze(1)).squeeze(1)
+        return torch.clip(x, 0, 1)
 
 
-class Discriminator(nn.Module):
-    def __init__(self, channels_img=3, features_d=64):
-        super(Discriminator, self).__init__()
+class HSDiscriminator(nn.Module):
+    def __init__(self, channels_img=4, features_d=12):
+        # Discriminator takes in the point cloud and returns a list of predicted labels (real/fake)
+        super().__init__()
         self.disc = nn.Sequential(
             nn.Conv2d(
-                channels_img, features_d, kernel_size=4, stride=2, padding=1
+                channels_img, features_d // 2, kernel_size=(64, 2), stride=(2, 1)
             ),  # 32x32
             nn.LeakyReLU(0.2),
-            self._block(features_d, features_d * 2, 4, 2, 1),  # 16x16
-            self._block(features_d * 2, features_d * 4, 4, 2, 1),  # 8x8
-            self._block(features_d * 4, features_d * 8, 4, 2, 1),  # 4x4
-            nn.Conv2d(features_d * 8, 1, kernel_size=4, stride=2, padding=0),  # 1x1
+            self._block(
+                features_d // 2, features_d, kernel_size=(32, 2), stride=(3, 1)
+            ),
+            self._block(features_d, features_d, kernel_size=(16, 2), stride=(1, 1)),
+            nn.Conv2d(features_d, 1, kernel_size=(4, 2)),  # 1x1
+            nn.Flatten(),
+            nn.MaxPool1d(5),
+            nn.Linear(178, 32),
+            nn.LeakyReLU(0.2),
+            nn.Linear(32, 1),
             nn.Sigmoid(),
         )
 
-    def _block(self, in_channels, out_channels, kernel_size, stride, padding):
+    def _block(self, in_channels, out_channels, kernel_size, stride):
         return nn.Sequential(
             nn.Conv2d(
-                in_channels, out_channels, kernel_size, stride, padding, bias=False
+                in_channels,
+                out_channels,
+                kernel_size,
+                stride=stride,
+                padding=1,
+                bias=False,
             ),
             nn.BatchNorm2d(out_channels),
             nn.LeakyReLU(0.2),
         )
 
     def forward(self, x):
-        return self.disc(x)
+        return self.disc(x.unsqueeze(1))
 
 
-# Hyperparameters
-z_dim = 100
-lr = 0.0002
-batch_size = 128
-num_epochs = 5
-channels_img = 1
-features_d = 64
-features_g = 64
-
-
-class HardSphereGAN:
+class GAN(nn.Module):
     def __init__(
         self,
-        z_dim=100,
-        lr=0.0002,
-        batch_size=128,
-        image_size=64,
-        channels_img=1,
-        features_d=64,
-        features_g=64,
+        trainset,
+        testset,
+        descriptor_loss=False,
+        **run_params,
     ):
-        self.z_dim = z_dim
-        self.lr = lr
-        self.batch_size = batch_size
-        self.image_size = image_size
-        self.channels_img = channels_img
-        self.features_d = features_d
-        self.features_g = features_g
+        super(GAN, self).__init__()
+        device = run_params["training"]["device"]
+        batch_size = run_params["training"]["batch_size"]
 
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        generator = HSGenerator(**run_params["generator"])
+        discriminator = HSDiscriminator(**run_params["discriminator"])
 
-        self.gen = Generator(z_dim, channels_img, features_g).to(self.device)
-        self.disc = Discriminator(channels_img, features_d).to(self.device)
+        self.run_params = run_params
+        self.trainset = trainset
+        self.testset = testset
+        self.device = device
 
-        self.opt_gen = torch.optim.Adam(
-            self.gen.parameters(), lr=lr, betas=(0.5, 0.999)
+        self.generator = generator.to(device)
+        self.discriminator = discriminator.to(device)
+        self.criterion = nn.BCELoss()  # TODO: Think of this
+
+        self.d_optimizer = build_optimizer_fn_from_config(
+            run_params["training"]["optimizer_d"]
+        )(
+            self.discriminator.parameters()
+        )  # AdamHD(params=self.generator.parameters(), lr=0.0002)
+        self.g_optimizer = build_optimizer_fn_from_config(
+            run_params["training"]["optimizer_g"]
+        )(
+            self.generator.parameters()
+        )  # AdamHD(params=self.generator.parameters(), lr=0.0002)
+
+        if descriptor_loss:
+            self.descriptor_criterion = nn.MSELoss()
+            # TODO: Implement
+
+    def train_n_epochs(
+        self, epochs, batch_size=None, experiment_name=None, run_name=None
+    ):
+        mlflow.set_tracking_uri(uri="http://127.0.0.1:8080")
+
+        print(f'Starting...\nTime: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
+
+        if batch_size is None:
+            batch_size = self.run_params["training"]["batch_size"]
+
+        if run_name is None:
+            run_name = build_run_name()
+
+        if experiment_name is not None:
+
+            if not mlflow.search_experiments(
+                filter_string=f"name = '{experiment_name}'"
+            ):
+                experiment_id = mlflow.create_experiment(experiment_name)
+            else:
+                experiment_id = mlflow.get_experiment_by_name(
+                    experiment_name
+                ).experiment_id
+
+            run_params = {"experiment_id": experiment_id, "run_name": run_name}
+        else:
+            run_params = {"run_name": run_name}
+
+        dataloader = DataLoader(self.trainset, batch_size=batch_size, shuffle=True)
+
+        with mlflow.start_run(**run_params):
+            for epoch in range(epochs):
+                self._train_epoch(epoch, batch_size=batch_size, dataloader=dataloader)
+
+    def _physical_loss(self, real_images, fake_images):
+        # Loss based on the physical properties of the point cloud
+
+        # Loss based on sum of radiuses
+        real_radius = real_images[:, 2].mean()
+        fake_radius = fake_images[:, 2].mean()
+        radius_loss = torch.abs(real_radius - fake_radius)
+
+        # Loss based on the variance of radii
+        real_r_var = real_images[:, 2].var()
+        fake_r_var = fake_images[:, 2].var()
+        r_var_loss = torch.abs(real_r_var - fake_r_var)
+
+        # Loss based on mean and variance of x and y # NOTE: May not be meaningful, maybe use Min, max etc. or don't use
+        # real_x_mean = real_images[:,0].mean()
+        # fake_x_mean = fake_images[:,0].mean()
+        # x_mean_loss = torch.abs(real_x_mean - fake_x_mean)
+
+        # real_x_var = real_images[:,0].var()
+        # fake_x_var = fake_images[:,0].var()
+        # x_var_loss = torch.abs(real_x_var - fake_x_var)
+
+        # real_y_mean = real_images[:,1].mean()
+        # fake_y_mean = fake_images[:,1].mean()
+        # y_mean_loss = torch.abs(real_y_mean - fake_y_mean)
+
+        # real_y_var = real_images[:,1].var()
+        # fake_y_var = fake_images[:,1].var()
+        # y_var_loss = torch.abs(real_y_var - fake_y_var)
+
+        # TODO Add more physical properties, phi etc.
+        # loss = (radius_loss + r_var_loss + x_mean_loss + x_var_loss + y_mean_loss + y_var_loss) / 5
+        loss = (radius_loss + r_var_loss) / 2
+        return loss
+
+    def _train_epoch(self, epoch, batch_size=None, dataloader=None, save_model=True):
+
+        if batch_size is None:
+            batch_size = self.run_params["training"]["batch_size"]
+
+        if dataloader is None:
+            dataloader = DataLoader(self.trainset, batch_size=batch_size, shuffle=True)
+
+        self.generator.train()
+        self.discriminator.train()
+
+        mean_loss_d = 0
+        mean_loss_g = 0
+
+        d_loss = torch.tensor([0])
+
+        for descriptors, real_images in tqdm(dataloader):
+            real_images = real_images.to(self.device)
+            descriptors = descriptors.to(self.device)
+
+            real_labels = (
+                torch.ones(real_images.size(0), 1).to(self.device) - 0.1
+            )  # NOTE: A hack from 'Synthesising realistic 2D microstructures of unidirectional fibre-reinforced composites with a generative adversarial network'
+            fake_labels = torch.zeros(real_images.size(0), 1).to(
+                self.device
+            )  # NOTE: The hack could be used in reverse
+
+            # Train the discriminator
+            self.d_optimizer.zero_grad()
+
+            real_outputs = self.discriminator(real_images)
+            d_loss_real = self.criterion(real_outputs, real_labels)
+            d_loss_real.backward()
+
+            fake_images = self.generator(descriptors)
+            fake_outputs = self.discriminator(fake_images)
+            d_loss_fake = self.criterion(fake_outputs, fake_labels)
+            d_loss_fake.backward()
+
+            d_loss = d_loss_real + d_loss_fake
+
+            d_grad_norm = torch.nn.utils.clip_grad_norm_(
+                self.discriminator.parameters(), 50, error_if_nonfinite=True
+            )  # Clip gradients
+            self.d_optimizer.step()
+            mean_loss_d += d_loss.item()
+
+            # Train the generator
+            self.g_optimizer.zero_grad()
+
+            fake_images = self.generator(descriptors)
+            fake_outputs = self.discriminator(fake_images)
+            g_loss_gan = self.criterion(
+                fake_outputs, real_labels
+            )  # We want the generator to generate images that the discriminator thinks are real
+            g_loss_physical = self._physical_loss(real_images, fake_images)
+
+            g_loss = g_loss_gan + g_loss_physical
+            g_loss.backward()
+
+            g_grad_norm = torch.nn.utils.clip_grad_norm_(
+                self.generator.parameters(), 50, error_if_nonfinite=True
+            )  # Clip gradients
+            self.g_optimizer.step()
+
+            mean_loss_g += g_loss.item()
+
+            if epoch % 5:
+                fig = plot_sample_figures(
+                    self.generator,
+                    self.discriminator,
+                    self.dataset,
+                    n=5,
+                    plot_radius=False,
+                    return_fig=True,
+                )
+                # Log pyplot figure to mlflow
+                mlflow.log_figure(fig, f"generator_samples_epoch_{epoch}.png")
+                plt.close(fig)
+
+            if save_model:
+                pass
+                # Log the model
+                # sklearn.log_model(
+                #     sk_model=lr,
+                #     artifact_path="iris_model",
+                #     signature=signature,
+                #     input_example=X_train,
+                #     registered_model_name="tracking-quickstart",
+                # )
+
+        print(
+            f'Time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, Epoch {epoch}, D loss: {d_loss.item()}, G_GAN loss: {g_loss_gan.item()}, G_P loss: {g_loss_physical.item()}'
         )
-        self.opt_disc = torch.optim.Adam(
-            self.disc.parameters(), lr=lr, betas=(0.5, 0.999)
-        )
 
-        self.criterion = nn.BCELoss()
-        self.fixed_noise = torch.randn(64, z_dim, 1, 1).to(self.device)
+        mean_loss_d /= len(self.trainset)
+        mean_loss_g /= len(self.trainset)
 
-    def _reset_gradients(self):
-        self.opt_gen.zero_grad()
-        self.opt_disc.zero_grad()
+        # Log metrics with mlflow
+        mlflow.log_metric("D_loss", mean_loss_d, step=epoch)
+        mlflow.log_metric("G_GAN_loss", mean_loss_g, step=epoch)
+        mlflow.log_metric("G_P_loss", g_loss_physical.item(), step=epoch)
 
-    def _discriminator_loss(self, real, fake):
-        real_loss = self.criterion(real, torch.ones_like(real))
-        fake_loss = self.criterion(fake, torch.zeros_like(fake))
-        return real_loss + fake_loss
+        # Log gradients with mlflow
 
-    def _generator_loss(self, fake):
-        return self.criterion(fake, torch.ones_like(fake))
+        mlflow.log_metric("D_grad_norm", d_grad_norm, step=epoch)
+        mlflow.log_metric("G_grad_norm", g_grad_norm, step=epoch)
 
-    def forward(self, x):
-        return self.gen(x)
+        return mean_loss_d, mean_loss_g
 
-    # Create a basic training method for the GAN
-
-    def train(self, real):
-        self.gen.train()
-        self.disc.train()
-
-        real = real.to(self.device)
-        noise = torch.randn(batch_size, z_dim, 1, 1).to(self.device)
-        fake = self.gen(noise)
-        disc_real = self.disc(real).reshape(-1)
-        loss_disc_real = self.criterion(disc_real, torch.ones_like(disc_real))
-        disc_fake = self.disc(fake.detach()).reshape(-1)
-        loss_disc_fake = self.criterion(disc_fake, torch.zeros_like(disc_fake))
-        loss_disc = (loss_disc_real + loss_disc_fake) / 2
-        self._reset_gradients()
-        loss_disc.backward(retain_graph=True)
-        self.opt_disc.step()
-
-        output = self.disc(fake).reshape(-1)
-        loss_gen = self.criterion(output, torch.ones_like(output))
-        self._reset_gradients()
-        loss_gen.backward()
-        self.opt_gen.step()
-
-        return loss_disc, loss_gen
+    def generate(self, input):
+        self.generator.eval()
+        return self.generator(input.to(self.device)).detach().cpu()

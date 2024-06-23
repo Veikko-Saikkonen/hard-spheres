@@ -1,0 +1,23 @@
+--pre torch --extra-index-url https://download.pytorch.org/whl/nightly/cpu
+--pre torchvision --extra-index-url https://download.pytorch.org/whl/nightly/cpu
+--pre torchaudio --extra-index-url https://download.pytorch.org/whl/nightly/cpu
+adabound
+jupyter
+ipykernel
+ipython
+lime
+matplotlib
+mlflow
+numpy
+openpyxl
+pandas
+scikit-image
+scikit-learn
+scipy
+seaborn
+shap
+torchinfo
+tqdm
+xgboost
+pickleshare
+git+https://github.com/gbaydin/hypergradient-descent.git # Slow

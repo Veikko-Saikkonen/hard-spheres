@@ -84,8 +84,8 @@ def run_torch(
     """
     best_model = None
     # Use GPU if available
-    print("Cuda available: ", torch.cuda.is_available())
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    print("Mps available: ", torch.backends.mps.is_available())
+    device = ("mps" if torch.backends.mps.is_available() else "cpu",)
 
     # Move model to device
     model = model.to(device)

@@ -27,11 +27,11 @@ def plot_sample_figures(
     plot_radius=True,
     return_fig=False,
 ):
-    sample_generated_y = generator(dataset[:][0][0:n])
+    sample_generated_y = generator(dataset[n][0]).detach()
 
     if sample_y is None:
         try:
-            sample_y = dataset[:][1][0:n]
+            sample_y = dataset[n][1].unsqueeze(0)
         except TypeError:
             raise ValueError("Either 'sample_y' or 'dataset' must be defined!")
 
@@ -39,19 +39,24 @@ def plot_sample_figures(
 
     fig, ax = plt.subplots(1, 2, figsize=(10, 5))
 
-    plot_pointcloud(sample_y[0], ax=ax[0], plot_radius=plot_radius)
+    plot_pointcloud(sample_y.squeeze(0).cpu(), ax=ax[0], plot_radius=plot_radius)
 
     plot_pointcloud(
-        sample_generated_y[0].detach().numpy(), ax=ax[1], plot_radius=plot_radius
+        sample_generated_y.squeeze(0).cpu().detach(), ax=ax[1], plot_radius=plot_radius
     )
-
     # Discriminator predictions on the generated data and the real data
 
-    real_preds = discriminator(sample_y)
-    preds = discriminator(sample_generated_y)
+    real_preds = discriminator(sample_y).detach().cpu()
+    preds = discriminator(sample_generated_y).detach().cpu()
 
     ax[0].set_title("Real, discriminator pred: {:.2f}".format(real_preds[0].item()))
     ax[1].set_title("Generated, discriminator pred: {:.2f}".format(preds[0].item()))
+
+    ax[0].axis("equal")
+    ax[1].axis("equal")
+
+    [a.set_xlim(-0.1, 1.1) for a in ax]
+    [a.set_ylim(-0.1, 1.1) for a in ax]
 
     if not return_fig:
         plt.show()

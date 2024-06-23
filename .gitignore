@@ -160,3 +160,4 @@ data
 # MLFLow runs
 
 mlruns
+mlartifacts

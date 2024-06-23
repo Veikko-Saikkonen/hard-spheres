@@ -1,6 +1,7 @@
 import torch
 
 from torch.utils.data import TensorDataset
+import lightning as L
 
 from .load_data import get_descriptors
 
@@ -49,3 +50,39 @@ class HSDataset(TensorDataset):
         pointcloud = self.x[idx]
         descriptors = self.y[idx]
         return pointcloud, descriptors
+
+    def to(self, device):
+        self.x = self.x.to(device)
+        self.y = self.y.to(device)
+        return self
+
+
+class HSDatasetLighting(L.LightningDataModule):
+    def __init__(
+        self,
+        dataframe,
+        device="cpu",
+        descriptor_list=["phi"],
+        synthetic_samples=False,
+        batch_size=32,
+    ):
+        super().__init__()
+        self.dataframe = dataframe
+        self.device = device
+        self.descriptor_list = descriptor_list
+        self.synthetic_samples = synthetic_samples
+        self.batch_size = batch_size
+
+    def setup(self, stage=None):
+        if stage == "fit" or stage is None:
+            self.train = HSDataset(
+                self.dataframe,
+                device=self.device,
+                descriptor_list=self.descriptor_list,
+                synthetic_samples=self.synthetic_samples,
+            )
+
+    def train_dataloader(self):
+        return torch.utils.data.DataLoader(
+            self.train, batch_size=self.batch_size, shuffle=True
+        )

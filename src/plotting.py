@@ -39,6 +39,9 @@ def plot_sample_figures(
 
     fig, ax = plt.subplots(1, 2, figsize=(10, 5))
 
+    # Set color palette for pyplot
+    plt.set_cmap("coolwarm")
+
     plot_pointcloud(sample_y.squeeze(0).cpu(), ax=ax[0], plot_radius=plot_radius)
 
     plot_pointcloud(

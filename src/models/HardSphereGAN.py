@@ -7,6 +7,7 @@ from tqdm import tqdm
 import mlflow
 from matplotlib import pyplot as plt
 import lightning as L
+import psutil
 
 import os
 
@@ -19,6 +20,7 @@ from hypergrad import (
 
 from src.plotting import plot_pointcloud, plot_sample_figures
 from src.utils import build_optimizer_fn_from_config, build_run_name
+from src.utils import log_nested_dict
 
 
 class HSGenerator(nn.Module):
@@ -83,6 +85,34 @@ class HSGenerator(nn.Module):
             ),
             nn.BatchNorm2d(cnn_channels),
             nn.LeakyReLU(0.2),
+            self._block(
+                cnn_channels,
+                cnn_channels,
+                kernel_size=(kernel_y, kernel_x),
+                stride=(1, 1),
+                padding="same",
+            ),
+            self._block(
+                cnn_channels,
+                cnn_channels,
+                kernel_size=(kernel_y, kernel_x),
+                stride=(1, 1),
+                padding="same",
+            ),
+            self._block(
+                cnn_channels,
+                cnn_channels,
+                kernel_size=(kernel_y, kernel_x),
+                stride=(1, 1),
+                padding="same",
+            ),
+            self._block(
+                cnn_channels,
+                cnn_channels,
+                kernel_size=(kernel_y, kernel_x),
+                stride=(1, 1),
+                padding="same",
+            ),
             nn.Conv2d(
                 cnn_channels,
                 1,
@@ -98,6 +128,20 @@ class HSGenerator(nn.Module):
         self.output_max_samples = output_max_samples
         self.latent_max_samples = latent_max_samples
         self.latent_dim = latent_dim
+
+    def _block(self, in_channels, out_channels, kernel_size, stride, padding):
+        return nn.Sequential(
+            nn.Conv2d(
+                in_channels,
+                out_channels,
+                kernel_size,
+                stride=stride,
+                padding=padding,
+                bias=True,
+            ),
+            nn.BatchNorm2d(out_channels),
+            nn.LeakyReLU(0.2),
+        )
 
     def get_z(self, batch_size):
         z = torch.rand(
@@ -130,108 +174,6 @@ class HSGenerator(nn.Module):
         return torch.clip(x, 0, 1)
 
 
-class HSGenerator(nn.Module):
-    def __init__(self, in_dim, latent_dim=27, output_max_samples=2000, cnn_channels=16):
-        super().__init__()
-        # Takes in the input descriptors and returns the output point cloud
-
-        assert latent_dim % 3 == 0, "Latent dim needs to be multiples of 3"
-
-        # TODO: Move these to config
-        # Maps descriptors to latent space
-        in_dim = 1  # We have a single descriptor
-
-        kernel_y = 64
-        cnn_layers = 3
-
-        latent_max_samples = (
-            output_max_samples + cnn_layers * kernel_y
-        )  # We will add some padding to the latent space
-        kernel_x = latent_dim // cnn_layers
-
-        # Takes in the input descriptors and returns the output point cloud
-
-        self.desc2latent = nn.Sequential(
-            # Input to latent space
-            nn.ConvTranspose1d(
-                in_dim,
-                latent_dim // 2,
-                kernel_size=latent_max_samples // 2,
-                stride=1,
-                padding=0,
-                bias=True,
-            ),
-            nn.ConvTranspose1d(
-                latent_dim // 2,
-                latent_dim,
-                kernel_size=latent_max_samples // 2 - 1,
-                stride=1,
-                padding=0,
-                bias=True,
-            ),
-        )
-
-        self.latent2pointcloud = nn.Sequential(
-            nn.Conv2d(
-                1,
-                cnn_channels,
-                kernel_size=(kernel_y + 1, kernel_x),
-                stride=1,
-                padding=0,
-                bias=True,
-            ),
-            nn.BatchNorm2d(cnn_channels),
-            nn.LeakyReLU(0.2),
-            nn.Conv2d(
-                cnn_channels,
-                cnn_channels,
-                kernel_size=(kernel_y + 1, kernel_x),
-                stride=1,
-                padding=0,
-                bias=True,
-            ),
-            nn.BatchNorm2d(cnn_channels),
-            nn.LeakyReLU(0.2),
-            nn.Conv2d(
-                cnn_channels,
-                1,
-                kernel_size=(kernel_y + 1, kernel_x),
-                stride=1,
-                padding=0,
-                bias=True,
-            ),
-        )
-
-        self.in_dim = in_dim
-        self.latent_dim = latent_dim
-        self.output_max_samples = output_max_samples
-        self.latent_max_samples = latent_max_samples
-        self.latent_dim = latent_dim
-
-    def get_z(self, batch_size):
-        return torch.rand(
-            batch_size,
-            self.latent_max_samples,
-            self.latent_dim,
-            device=self.desc2latent[0].weight.device,
-        )
-
-    def forward(self, d: torch.tensor):
-
-        # Input d: Batch x Descriptors x 1 # TODO: In the future a single descriptor will be a 1D tensor, changing dimensions to Batch x Descriptors x NFeatures
-        # Output: Batch x Samples x 4 (class, x, y, r)
-        batch_size = d.shape[0]
-
-        z = self.get_z(batch_size)
-
-        x = d
-        # x = (self.desc2latent(x).transpose(-1, -2) + z) / 2
-        # TODO: Add the descriptors
-        x = z
-        x = self.latent2pointcloud(x.unsqueeze(1)).squeeze(1)
-        return torch.clip(x, 0, 1)
-
-
 class HSDiscriminator(nn.Module):
     def __init__(self, channels_img=4, features_d=12):
         # Discriminator takes in the point cloud and returns a list of predicted labels (real/fake)
@@ -246,6 +188,7 @@ class HSDiscriminator(nn.Module):
             ),
             self._block(features_d, features_d, kernel_size=(16, 2), stride=(1, 1)),
             nn.Conv2d(features_d, 1, kernel_size=(4, 2)),  # 1x1
+            nn.LeakyReLU(0.2),
             nn.Flatten(),
             nn.MaxPool1d(5),
             nn.Linear(178, 32),
@@ -282,7 +225,7 @@ class GAN(nn.Module):
         discriminator_model: HSDiscriminator = None,
         **run_params,
     ):
-        super(GAN, self).__init__()
+        super().__init__()
         device = run_params["training"]["device"]
         batch_size = run_params["training"]["batch_size"]
 
@@ -353,9 +296,10 @@ class GAN(nn.Module):
 
         if comment is not None:
             run_params["description"] = comment
-
         with mlflow.start_run(**run_params):
             mlflow.log_params(self.run_params)
+            log_nested_dict(self.run_params)
+
             # Log model size
             mlflow.log_metric(
                 "g_model_size", sum(p.numel() for p in self.generator.parameters())
@@ -489,7 +433,11 @@ class GAN(nn.Module):
             d_grad_norm = torch.nn.utils.clip_grad_norm_(
                 self.discriminator.parameters(), 50, error_if_nonfinite=True
             )  # Clip gradients
-            self.d_optimizer.step()
+
+            # Give the generator a headstart
+            if self.run_params["training"]["generator_headstart"] < epoch:
+                self.d_optimizer.step()
+
             mean_loss_d += d_loss.item()
 
             # Train the generator
@@ -567,6 +515,10 @@ class GAN(nn.Module):
 
         mlflow.log_metric("D_grad_norm", d_grad_norm, step=epoch)
         mlflow.log_metric("G_grad_norm", g_grad_norm, step=epoch)
+
+        # Log system metrics
+        mlflow.log_metric("CPU", psutil.cpu_percent(), step=epoch)
+        mlflow.log_metric("RAM", psutil.virtual_memory().percent, step=epoch)
 
         return mean_loss_d, mean_loss_g
 

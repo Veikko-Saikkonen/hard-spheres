@@ -9,6 +9,17 @@ import hypergrad
 import adabound
 import torch
 
+import mlflow
+
+
+# Log nested items with underscores
+def log_nested_dict(d, prefix=""):
+    for key, value in d.items():
+        if isinstance(value, dict):
+            log_nested_dict(value, prefix=f"{prefix}{key}_")
+        else:
+            mlflow.log_param(f"{prefix}{key}", value)
+
 
 def build_run_name():
     # Gets two random nouns and an UUID for a human readable string name for a run.

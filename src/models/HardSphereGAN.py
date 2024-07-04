@@ -8,10 +8,9 @@ import mlflow
 from matplotlib import pyplot as plt
 import lightning as L
 import psutil
+import numpy as np
 
 import os
-
-os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 
 
 from hypergrad import (
@@ -21,27 +20,29 @@ from hypergrad import (
 from src.plotting import plot_pointcloud, plot_sample_figures
 from src.utils import build_optimizer_fn_from_config, build_run_name
 from src.utils import log_nested_dict
+from src.models.losses import build_loss_fn
 
 
 class HSGenerator(nn.Module):
-    def __init__(self, in_dim, latent_dim=27, output_max_samples=2000, cnn_channels=16):
+    def __init__(
+        self,
+        in_dim,
+        latent_dim=27,
+        output_max_samples=2000,
+        cnn_channels=2,
+        kernel_y=128,
+        kernel_x=5,
+        latent2pointcloud_layers=3,
+    ):
         super().__init__()
         # Takes in the input descriptors and returns the output point cloud
 
-        assert latent_dim % 3 == 0, "Latent dim needs to be multiples of 3"
-
-        # TODO: Move these to config
         # Maps descriptors to latent space
+        self.activation_fn = nn.Sigmoid
+
         in_dim = 1  # We have a single descriptor
 
-        kernel_y = 64
-        cnn_layers = 3
-
-        latent_max_samples = (
-            output_max_samples + cnn_layers * kernel_y
-        )  # We will add some padding to the latent space
-        kernel_x = latent_dim // cnn_layers
-
+        latent_max_samples = output_max_samples  # The maximum number of samples in the latent space is the same as the output space
         # Takes in the input descriptors and returns the output point cloud
 
         self.desc2latent = nn.Sequential(
@@ -64,70 +65,67 @@ class HSGenerator(nn.Module):
             ),
         )
 
-        self.latent2pointcloud = nn.Sequential(
-            nn.Conv2d(
-                1,
-                cnn_channels,
-                kernel_size=(kernel_y + 1, kernel_x),
-                stride=1,
-                padding=0,
-                bias=True,
-            ),
-            nn.BatchNorm2d(cnn_channels),
-            nn.LeakyReLU(0.2),
-            nn.Conv2d(
-                cnn_channels,
-                cnn_channels,
-                kernel_size=(kernel_y + 1, kernel_x),
-                stride=1,
-                padding=0,
-                bias=True,
-            ),
-            nn.BatchNorm2d(cnn_channels),
-            nn.LeakyReLU(0.2),
-            self._block(
-                cnn_channels,
-                cnn_channels,
-                kernel_size=(kernel_y, kernel_x),
-                stride=(1, 1),
-                padding="same",
-            ),
-            self._block(
-                cnn_channels,
-                cnn_channels,
-                kernel_size=(kernel_y, kernel_x),
-                stride=(1, 1),
-                padding="same",
-            ),
-            self._block(
-                cnn_channels,
-                cnn_channels,
-                kernel_size=(kernel_y, kernel_x),
-                stride=(1, 1),
-                padding="same",
-            ),
-            self._block(
-                cnn_channels,
-                cnn_channels,
-                kernel_size=(kernel_y, kernel_x),
-                stride=(1, 1),
-                padding="same",
-            ),
-            nn.Conv2d(
-                cnn_channels,
-                1,
-                kernel_size=(kernel_y + 1, kernel_x),
-                stride=1,
-                padding=0,
-                bias=True,
-            ),
+        self.latent2pointcloud = self._make_latent_to_pointcloud(
+            n_layers=latent2pointcloud_layers,
+            kernel_y=kernel_y,
+            kernel_x=kernel_x,
+            cnn_channels=cnn_channels,
         )
+
+        self.bn = nn.BatchNorm1d(3)  # Output normalization
 
         self.in_dim = in_dim
         self.latent_dim = latent_dim
         self.output_max_samples = output_max_samples
         self.latent_max_samples = latent_max_samples
         self.latent_dim = latent_dim
+
+    def _make_latent_to_pointcloud(self, n_layers, kernel_y, kernel_x, cnn_channels):
+        _input = nn.Conv2d(
+            1,
+            cnn_channels,
+            kernel_size=(kernel_y + 1, kernel_x),
+            stride=1,
+            padding="same",
+            bias=True,
+        )
+        _layers = [_input]
+
+        for i in range(n_layers):
+            _layers.append(self.activation_fn())
+            _layers.append(
+                nn.Conv2d(
+                    cnn_channels,
+                    cnn_channels,
+                    kernel_size=(kernel_y + 1, kernel_x),
+                    stride=1,
+                    padding="same",
+                    bias=False,
+                )
+            )
+        _layers.append(
+            nn.Conv2d(
+                cnn_channels,
+                out_channels=1,
+                kernel_size=(kernel_y + 1, kernel_x),
+                stride=1,
+                padding="same",
+                bias=True,
+            )
+        )
+
+        model = nn.Sequential(*_layers)
+
+        for layer in model:
+            if hasattr(layer, "weight"):
+                # nn.init.uniform_(layer.weight, a=-0.01, b=0.01)
+                nn.init.xavier_uniform_(
+                    layer.weight, gain=nn.init.calculate_gain("sigmoid")
+                )
+            # if hasattr(layer, "bias"):
+            #     nn.init.uniform_(layer.bias, a=-0.01, b=0.01)
+
+        return model
 
     def _block(self, in_channels, out_channels, kernel_size, stride, padding):
         return nn.Sequential(
@@ -140,16 +138,34 @@ class HSGenerator(nn.Module):
                 bias=True,
             ),
             nn.BatchNorm2d(out_channels),
-            nn.LeakyReLU(0.2),
+            self.activation_fn(),
         )
 
     def get_z(self, batch_size):
-        z = torch.rand(
-            batch_size,
-            self.latent_max_samples,
-            self.latent_dim,
-            device=self.desc2latent[0].weight.device,
+        # z = torch.rand(
+        #     batch_size,
+        #     self.latent_max_samples,
+        #     self.latent_dim,
+        #     device=self.desc2latent[0].weight.device,
+        # )
+        device = device = self.desc2latent[0].weight.device
+
+        # Set seed
+        torch.manual_seed(0)  # NOTE: This is a hack
+
+        zx = torch.rand(
+            batch_size, self.latent_max_samples, 1, device=device
+        )  # X is uniform
+        zy = torch.rand(
+            batch_size, self.latent_max_samples, 1, device=device
+        )  # Y is uniform
+        # R is inverse exponential
+        zr = torch.tensor(
+            np.random.exponential(0.3, (batch_size, self.latent_max_samples, 1)),
+            dtype=torch.float32,
+            device=device,
         )
+        z = torch.cat([zx, zy, zr], dim=-1)
 
         # Sort the z values the same way the labels are sorted
         # Sort the z values the same way the labels are sorted
@@ -171,6 +187,12 @@ class HSGenerator(nn.Module):
         # TODO: Add the descriptors
         x = z
         x = self.latent2pointcloud(x.unsqueeze(1)).squeeze(1)
+
+        # Batch normalization
+
+        # x = x.transpose(-1, -2)
+        # x = self.bn(x).transpose(-1, -2)
+
         return torch.clip(x, 0, 1)
 
 
@@ -245,7 +267,9 @@ class GAN(nn.Module):
 
         self.generator = generator.to(device)
         self.discriminator = discriminator.to(device)
-        self.criterion = nn.BCELoss()  # TODO: Think of this
+
+        self.d_criterion = build_loss_fn(**run_params["training"]["d_loss"])
+        self.g_criterion = build_loss_fn(**run_params["training"]["g_loss"])
 
         self.d_optimizer = build_optimizer_fn_from_config(
             run_params["training"]["optimizer_d"]
@@ -256,11 +280,7 @@ class GAN(nn.Module):
             run_params["training"]["optimizer_g"]
         )(
             self.generator.parameters()
-        )  # AdamHD(params=self.generator.parameters(), lr=0.0002)
-
-        if descriptor_loss:
-            self.descriptor_criterion = nn.MSELoss()
-            # TODO: Implement
+        )  #
 
     def train_n_epochs(
         self, epochs, batch_size=None, experiment_name=None, run_name=None, comment=None
@@ -296,6 +316,9 @@ class GAN(nn.Module):
 
         if comment is not None:
             run_params["description"] = comment
+        run_params["log_system_metrics"] = run_params.get(
+            "log_system_metrics", True
+        )  # Log system metrics by default
         with mlflow.start_run(**run_params):
             mlflow.log_params(self.run_params)
             log_nested_dict(self.run_params)
@@ -343,52 +366,6 @@ class GAN(nn.Module):
             except KeyboardInterrupt:  # For jupyter notebook
                 print("Interrupted")
 
-    def _feasibility_loss(self, fake_images):
-        # Loss based on the feasibility of the point cloud
-        # NOTE: This is not used for now
-        return 0
-
-    def _physical_loss(self, real_images, fake_images):
-        # Loss based on the physical properties of the point cloud
-
-        # Loss based on sum of radiuses
-        real_radius = real_images[:, 2].mean()
-        fake_radius = fake_images[:, 2].mean()
-        radius_loss = torch.abs(real_radius - fake_radius)
-
-        # Loss based on the variance of radii
-        real_r_var = real_images[:, 2].var()
-        fake_r_var = fake_images[:, 2].var()
-        r_var_loss = torch.abs(real_r_var - fake_r_var)
-
-        # Loss based on mean and variance of x and y # NOTE: May not be meaningful, maybe use Min, max etc. or don't use
-        # real_x_mean = real_images[:, 0].mean()
-        # fake_x_mean = fake_images[:, 0].mean()
-        # x_mean_loss = torch.abs(real_x_mean - fake_x_mean)
-
-        # real_x_var = real_images[:, 0].var()
-        # fake_x_var = fake_images[:, 0].var()
-        # x_var_loss = torch.abs(real_x_var - fake_x_var)
-
-        # real_y_mean = real_images[:, 1].mean()
-        # fake_y_mean = fake_images[:, 1].mean()
-        # y_mean_loss = torch.abs(real_y_mean - fake_y_mean)
-
-        # real_y_var = real_images[:, 1].var()
-        # fake_y_var = fake_images[:, 1].var()
-        # y_var_loss = torch.abs(real_y_var - fake_y_var)
-
-        # TODO Add more physical properties, phi etc.
-        loss = (
-            radius_loss
-            + r_var_loss
-            # + x_mean_loss
-            # + x_var_loss
-            # + y_mean_loss
-            # + y_var_loss
-        ) / 2
-        return loss
-
     def _train_epoch(self, epoch, batch_size=None, dataloader=None, save_model=True):
 
         if batch_size is None:
@@ -403,7 +380,23 @@ class GAN(nn.Module):
         mean_loss_d = 0
         mean_loss_g = 0
 
-        for descriptors, real_images in dataloader:
+        # Log the naive scenario of no training
+        fig = plot_sample_figures(
+            self.generator,
+            self.discriminator,
+            self.testset,
+            n=int(epoch % 4),  # NOTE: This is a hack
+            plot_radius=True,
+            return_fig=True,
+        )
+        # Log pyplot figure to mlflow
+
+        mlflow.log_figure(fig, f"generator_samples_epoch_pre.png")
+        plt.close(fig)
+
+        g_grad_norm = torch.tensor([0])
+
+        for i, (descriptors, real_images) in enumerate(dataloader):
             real_images = real_images.to(self.device)
             descriptors = descriptors.to(self.device)
 
@@ -419,13 +412,15 @@ class GAN(nn.Module):
             self.d_optimizer.zero_grad()
 
             real_outputs = self.discriminator(real_images)
-            d_loss_real = self.criterion(real_outputs, real_labels)
+            d_loss_real = self.d_criterion(real_outputs, real_labels)
             d_loss_real.backward()
 
-            fake_images = self.generator(descriptors).detach()
+            fake_images = self.generator(
+                torch.rand(*descriptors.size()).to(self.device)
+            ).detach()
             # NOTE: Should the fake images be detached to avoid backpropagating through the generator?
             fake_outputs = self.discriminator(fake_images)
-            d_loss_fake = self.criterion(fake_outputs, fake_labels)
+            d_loss_fake = self.d_criterion(fake_outputs, fake_labels)
             d_loss_fake.backward()
 
             d_loss = d_loss_real + d_loss_fake
@@ -441,20 +436,22 @@ class GAN(nn.Module):
             mean_loss_d += d_loss.item()
 
             # Train the generator
+            if i % self.run_params["training"]["training_ratio_dg"] != 0:
+                continue
+                # Only update the generator every n steps
+
             self.generator.train()  # NOTE: This is not in the original code
             self.discriminator.eval()  # NOTE: This is not in the original code
             self.g_optimizer.zero_grad()
 
-            fake_images = self.generator(descriptors)
+            fake_images = self.generator(
+                torch.rand(*descriptors.size()).to(self.device)
+            )
             fake_outputs = self.discriminator(fake_images)
-            g_loss_gan = self.criterion(
-                fake_outputs, real_labels
-            )  # We want the generator to generate images that the discriminator thinks are real
-            g_loss_physical = self._physical_loss(real_images, fake_images)
 
-            g_loss = (
-                g_loss_gan + g_loss_physical
-            )  # NOTE: The physical loss is not used for now
+            g_loss = self.g_criterion(
+                real_images, fake_images, fake_outputs, real_labels
+            )  # We want the generator to generate images that the discriminator thinks are real
             g_loss.backward()
 
             g_grad_norm = torch.nn.utils.clip_grad_norm_(
@@ -465,11 +462,12 @@ class GAN(nn.Module):
             mean_loss_g += g_loss.item()
 
         # Log the optimizer hyperparameters
-        lr_d = self.d_optimizer.param_groups[0]["lr"]
-        lr_g = self.g_optimizer.param_groups[0]["lr"]
+        if hasattr(self.d_optimizer, "param_groups"):
+            lr_d = self.d_optimizer.param_groups[0]["lr"]
+            lr_g = self.g_optimizer.param_groups[0]["lr"]
 
-        mlflow.log_metric("lr_d", lr_d, step=epoch)
-        mlflow.log_metric("lr_g", lr_g, step=epoch)
+            mlflow.log_metric("lr_d", lr_d, step=epoch)
+            mlflow.log_metric("lr_g", lr_g, step=epoch)
 
         if (
             epoch % self.run_params["training"]["log_image_frequency"]
@@ -484,7 +482,10 @@ class GAN(nn.Module):
                 return_fig=True,
             )
             # Log pyplot figure to mlflow
-            mlflow.log_figure(fig, f"generator_samples_epoch_{epoch}.png")
+
+            epoch_str = str(epoch).zfill(4)
+
+            mlflow.log_figure(fig, f"generator_samples_epoch_{epoch_str}.png")
             plt.close(fig)
 
         if save_model:
@@ -506,136 +507,27 @@ class GAN(nn.Module):
         mean_loss_g /= len(self.trainset)
 
         # Log metrics with mlflow
+        g_loss_gan = self.g_criterion.prev_gan_loss.item()
+        g_loss_radius = self.g_criterion.prev_radius_loss.item()
+        g_loss_density = self.g_criterion.prev_grid_density_loss.item()
+
         mlflow.log_metric("D_loss", mean_loss_d, step=epoch)
         mlflow.log_metric("G_loss", mean_loss_g, step=epoch)
-        mlflow.log_metric("G_P_loss", g_loss_physical.item(), step=epoch)
-        mlflow.log_metric("G_GAN_loss", g_loss_gan.item(), step=epoch)
+        mlflow.log_metric("G_Density_loss", g_loss_density, step=epoch)
+        mlflow.log_metric("G_R_loss", g_loss_radius, step=epoch)
+        mlflow.log_metric("G_GAN_loss", g_loss_gan, step=epoch)
 
         # Log gradients with mlflow
 
         mlflow.log_metric("D_grad_norm", d_grad_norm, step=epoch)
         mlflow.log_metric("G_grad_norm", g_grad_norm, step=epoch)
 
-        # Log system metrics
-        mlflow.log_metric("CPU", psutil.cpu_percent(), step=epoch)
-        mlflow.log_metric("RAM", psutil.virtual_memory().percent, step=epoch)
+        # Log system metrics # NOTE: These are logged elsewhere
+        # mlflow.log_metric("CPU", psutil.cpu_percent(), step=epoch)
+        # mlflow.log_metric("RAM", psutil.virtual_memory().percent, step=epoch)
 
         return mean_loss_d, mean_loss_g
 
     def generate(self, input):
         self.generator.eval()
         return self.generator(input.to(self.device)).detach().cpu()
-
-
-# Add a PyTorch Lighting compatible module
-
-
-class HardSphereGAN(L.LightningModule):
-    def __init__(
-        self,
-        trainset,
-        testset,
-        descriptor_loss=False,
-        **run_params,
-    ):
-        super(HardSphereGAN, self).__init__()
-        device = run_params["training"]["device"]
-        batch_size = run_params["training"]["batch_size"]
-
-        generator = HSGenerator(**run_params["generator"])
-        discriminator = HSDiscriminator(**run_params["discriminator"])
-
-        self.run_params = run_params
-        self.trainset = trainset
-        self.testset = testset
-        self.device = device
-
-        self.generator = generator.to(device)
-        self.discriminator = discriminator.to(device)
-        self.criterion = nn.BCELoss()  # TODO: Think of this
-
-        if descriptor_loss:
-            self.descriptor_criterion = nn.MSELoss()
-
-    def forward(self, x):
-        return self.generator(x)
-
-    def training_step(self, batch, batch_idx, optimizer_idx):
-        descriptors, real_images = batch
-        real_images = real_images.to(self.device)
-        descriptors = descriptors.to(self.device)
-
-        real_labels = torch.ones(real_images.size(0), 1).to(self.device) - 0.1
-        fake_labels = torch.zeros(real_images.size(0), 1).to(self.device)
-
-        if optimizer_idx == 0:
-            self.d_optimizer.zero_grad()
-
-            real_outputs = self.discriminator(real_images)
-            d_loss_real = self.criterion(real_outputs, real_labels)
-            d_loss_real.backward()
-
-            fake_images = self.generator(descriptors).detach()
-            fake_outputs = self.discriminator(fake_images)
-            d_loss_fake = self.criterion(fake_outputs, fake_labels)
-            d_loss_fake.backward()
-
-            d_loss = d_loss_real + d_loss_fake
-
-            d_grad_norm = torch.nn.utils.clip_grad_norm_(
-                self.discriminator.parameters(), 50, error_if_nonfinite=True
-            )
-            self.d_optimizer.step()
-
-            return d_loss
-
-        if optimizer_idx == 1:
-            self.g_optimizer.zero_grad()
-
-            fake_images = self.generator(descriptors)
-            fake_outputs = self.discriminator(fake_images)
-            g_loss_gan = self.criterion(fake_outputs, real_labels)
-            g_loss_physical = self._physical_loss(real_images, fake_images)
-
-            g_loss = g_loss_gan + g_loss_physical
-            g_loss.backward()
-
-            g_grad_norm = torch.nn.utils.clip_grad_norm_(
-                self.generator.parameters(), 50, error_if_nonfinite=True
-            )
-            self.g_optimizer.step()
-
-            return g_loss
-
-    def _physical_loss(self, real_images, fake_images):
-        real_radius = real_images[:, 2].mean()
-        fake_radius = fake_images[:, 2].mean()
-        radius_loss = torch.abs(real_radius - fake_radius)
-
-        real_r_var = real_images[:, 2].var()
-        fake_r_var = fake_images[:, 2].var()
-        r_var_loss = torch.abs(real_r_var - fake_r_var)
-
-        loss = (radius_loss + r_var_loss) / 2
-        return loss
-
-    def configure_optimizers(self):
-
-        self.d_optimizer = build_optimizer_fn_from_config(
-            self.run_params["training"]["optimizer_d"]
-        )(self.discriminator.parameters())
-        self.g_optimizer = build_optimizer_fn_from_config(
-            self.run_params["training"]["optimizer_g"]
-        )(self.generator.parameters())
-
-        return [self.d_optimizer, self.g_optimizer], []
-
-    def generate(self, input):
-        self.generator.eval()
-        return self.generator(input.to(self.device)).detach().cpu()
-
-    def training_epoch_end(self, outputs):
-        mean_loss_d = torch.stack([x for x in outputs[0]]).mean()
-        mean_loss_g = torch.stack([x for x in outputs[1]]).mean()
-
-        return mean_loss_d, mean_loss_g

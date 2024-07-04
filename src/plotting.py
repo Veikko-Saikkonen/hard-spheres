@@ -6,7 +6,7 @@ def plot_pointcloud(pointcloud, ax=None, plot_radius=True):
         fig, ax = plt.subplots(1, 1)
     xs = pointcloud[:, 0]
     ys = pointcloud[:, 1]
-    rs = pointcloud[:, 2]
+    rs = pointcloud[:, 2] + 0.1  # Add 0.1 to the radius to make it visible
 
     if plot_radius:
         ax.scatter(xs, ys, c=rs, s=rs * 30, alpha=0.5)
@@ -40,7 +40,7 @@ def plot_sample_figures(
     fig, ax = plt.subplots(1, 2, figsize=(10, 5))
 
     # Set color palette for pyplot
-    plt.set_cmap("coolwarm")
+    plt.set_cmap("viridis")
 
     plot_pointcloud(sample_y.squeeze(0).cpu(), ax=ax[0], plot_radius=plot_radius)
 

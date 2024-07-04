@@ -338,6 +338,19 @@ class GAN(nn.Module):
 
                 patience = self.run_params["training"]["early_stopping_patience"]
                 headstart = self.run_params["training"]["early_stopping_headstart"]
+                # Log the naive scenario of no training
+                fig = plot_sample_figures(
+                    self.generator,
+                    self.discriminator,
+                    self.testset,
+                    n=0,
+                    plot_radius=True,
+                    return_fig=True,
+                )
+                # Log pyplot figure to mlflow
+
+                mlflow.log_figure(fig, f"generator_samples_epoch_pre.png")
+                plt.close(fig)
 
                 for epoch in tqdm(range(epochs)):
                     mean_loss_d, mean_loss_g = self._train_epoch(
@@ -379,20 +392,6 @@ class GAN(nn.Module):
 
         mean_loss_d = 0
         mean_loss_g = 0
-
-        # Log the naive scenario of no training
-        fig = plot_sample_figures(
-            self.generator,
-            self.discriminator,
-            self.testset,
-            n=int(epoch % 4),  # NOTE: This is a hack
-            plot_radius=True,
-            return_fig=True,
-        )
-        # Log pyplot figure to mlflow
-
-        mlflow.log_figure(fig, f"generator_samples_epoch_pre.png")
-        plt.close(fig)
 
         g_grad_norm = torch.tensor([0])
 
@@ -510,12 +509,16 @@ class GAN(nn.Module):
         g_loss_gan = self.g_criterion.prev_gan_loss.item()
         g_loss_radius = self.g_criterion.prev_radius_loss.item()
         g_loss_density = self.g_criterion.prev_grid_density_loss.item()
+        g_physical_feasibility_loss = (
+            self.g_criterion.prev_physical_feasibility_loss.item()
+        )
 
         mlflow.log_metric("D_loss", mean_loss_d, step=epoch)
         mlflow.log_metric("G_loss", mean_loss_g, step=epoch)
         mlflow.log_metric("G_Density_loss", g_loss_density, step=epoch)
         mlflow.log_metric("G_R_loss", g_loss_radius, step=epoch)
         mlflow.log_metric("G_GAN_loss", g_loss_gan, step=epoch)
+        mlflow.log_metric("G_Feasibility_loss", g_physical_feasibility_loss, step=epoch)
 
         # Log gradients with mlflow
 

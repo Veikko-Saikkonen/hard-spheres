@@ -23,17 +23,24 @@ class HSGeneratorLoss(nn.Module):
         gan_loss,
         radius_loss,
         grid_density_loss,
+        physical_feasibility_loss,
+        scale_params,
+        collision_loss_coefficient,
     ):
         super().__init__()
         self.gan_loss = gan_loss
         self.gan_loss_fn = BCELoss()
         self.radius_loss = radius_loss
         self.grid_density_loss = grid_density_loss
+        self.physical_feasibility_loss = physical_feasibility_loss
+        self.scale_params = scale_params
+        self.collision_loss_coefficient = collision_loss_coefficient
 
         # For logging, save the results
         self.prev_gan_loss = torch.tensor([0])
         self.prev_radius_loss = torch.tensor([0])
         self.prev_grid_density_loss = torch.tensor([0])
+        self.prev_physical_feasibility_loss = torch.tensor([0])
 
         self.mse = MSELoss()
 
@@ -53,18 +60,64 @@ class HSGeneratorLoss(nn.Module):
 
     def _radius_loss(self, real_images, fake_images):
         # Loss based on sum of radiuses
-        real_radius = real_images[:, 2].mean()
-        fake_radius = fake_images[:, 2].mean()
-        radius_loss = torch.abs(real_radius - fake_radius)
+        quantiles = torch.tensor(  # TODO: Make this a parameter
+            [0.05, 0.25, 0.50, 0.75, 0.95],
+            dtype=torch.float32,
+            device=fake_images.device,
+        )
 
-        # Loss based on the variance of radii
-        real_r_var = real_images[:, 2].var()
-        fake_r_var = fake_images[:, 2].var()
-        r_var_loss = torch.abs(real_r_var - fake_r_var)
+        fake_rq = torch.quantile(fake_images[:, :, 2], quantiles)
+        real_yq = torch.quantile(real_images[:, :, 2], quantiles)
+        loss = self.mse(fake_rq, real_yq)
 
-        # TODO Add more physical properties, phi etc.
-        loss = (radius_loss + r_var_loss) / 2
         return loss
+
+    def _physical_feasibility_loss(self, fake_points, collision_loss_coefficient=1):
+
+        scale_params = self.scale_params
+
+        x_min, x_max = scale_params["x"]
+        y_min, y_max = scale_params["y"]
+        r_min, r_max = scale_params["r"]
+
+        # Rescale the coordinates and radii back to their original scales
+        x = fake_points[:, :, 0] * (x_max - x_min) + x_min
+        y = fake_points[:, :, 1] * (y_max - y_min) + y_min
+        radii = fake_points[:, :, 2] * (r_max - r_min) + r_min
+
+        # Combine rescaled values into one tensor
+        rescaled_points = torch.stack((x, y, radii), dim=2)
+        # Calculate the pairwise distance matrix
+        # If the distance is less than the sum of the radii, then it's a collision
+
+        # For each collision, add a penalty
+
+        # Calculate the pairwise distance matrix
+        n = fake_points.shape[1]
+        dist = torch.cdist(rescaled_points[:, :, :2], rescaled_points[:, :, :2])
+        # Calculate the sum of the radii
+        radii = rescaled_points[:, :, 2].unsqueeze(1) + rescaled_points[
+            :, :, 2
+        ].unsqueeze(2)
+
+        # Calculate the collision matrix
+        # collision_matrix = radii > dist
+
+        # Instead of a hard limit, use a differentiable loss function
+        overlap_distance = (radii - dist) / radii.sum()
+        overlap_distance = nn.ReLU(inplace=False)(
+            overlap_distance
+        )  # Zero the negative values, the distances can be larger than radius
+        overlap_distance = overlap_distance.sum()
+
+        # Calculate the collision count
+        # collision_count = (
+        #     collision_matrix.sum() - n
+        # )  # Subtract n to remove self-collisions
+        # # Calculate the penalty
+        # penalty = collision_count / n
+
+        return overlap_distance * collision_loss_coefficient
 
     def _gan_loss(self, fake_outputs, real_labels):
         return self.gan_loss_fn(fake_outputs, real_labels)
@@ -74,7 +127,6 @@ class HSGeneratorLoss(nn.Module):
         return -torch.mean(torch.log(fake_outputs))
 
     def _grid_density_loss(self, real_images, fake_images):
-
         quantiles = torch.tensor(
             [0.05, 0.25, 0.50, 0.75, 0.95],
             dtype=torch.float32,
@@ -83,15 +135,26 @@ class HSGeneratorLoss(nn.Module):
         # first two columns are x and y coordinates
         # Count the 5, 25, 50, 75, 95 quantiles for the first two columns and compare to the ground truth
 
-        fake_xq = torch.quantile(fake_images[:, 0], quantiles)
-        real_xq = torch.tensor(
+        # X distribution
+        fake_xq = torch.quantile(fake_images[:, :, 0], quantiles)
+
+        real_xq = torch.tensor(  # TODO: Make this a parameter
             [0.05, 0.25, 0.50, 0.75, 0.95], device=fake_images.device
         )  # NOTE: Tensors normalized from 0 to 1 so the quantiles should match
 
-        fake_yq = torch.quantile(fake_images[:, 1], quantiles)
-        real_yq = torch.tensor(
+        # Y distribution
+        fake_yq = torch.quantile(fake_images[:, :, 1], quantiles)
+        real_yq = torch.tensor(  # TODO: Make this a parameter
             [0.05, 0.25, 0.50, 0.75, 0.95], device=fake_images.device
         )  # NOTE: Tensors normalized from 0 to 1 so the quantiles should match
+
+        # Also do a xy loss
+
+        # fake_xy = fake_images[:, :, 0] + fake_images[:, :, 1]
+        # real_xy = real_images[:, :, 0] + real_images[:, :, 1]
+
+        # fake_xyq = torch.quantile(fake_xy, quantiles)
+        # real_xyq = torch.quantile(real_xy, quantiles)
 
         loss = (self.mse(fake_xq, real_xq) + self.mse(fake_yq, real_yq)) / 2
 
@@ -106,6 +169,13 @@ class HSGeneratorLoss(nn.Module):
                 real_images=real_images, fake_images=fake_images
             )
             loss += self.prev_radius_loss
+
+        if self.physical_feasibility_loss:
+            self.prev_physical_feasibility_loss = self._physical_feasibility_loss(
+                fake_images,
+                collision_loss_coefficient=self.collision_loss_coefficient,  # TODO: Make this a parameter
+            )
+            loss += self.prev_physical_feasibility_loss
 
         if self.gan_loss:
             # self.prev_gan_loss = self._gan_loss(fake_outputs, real_labels)

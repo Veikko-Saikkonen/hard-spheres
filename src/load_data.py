@@ -7,7 +7,7 @@ def get_descriptors(data, experiment, descriptors=["phi"]):
 
     phi = float(experiment.split("-")[-1])
     # Assume future data will have more dimensions
-    phi = [[phi]] * 3
+    phi = [[phi]]
     descriptors.append(phi)
 
     # Convert to tensor

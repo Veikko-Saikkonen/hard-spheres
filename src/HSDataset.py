@@ -9,7 +9,12 @@ from .load_data import get_descriptors
 # Create a dataset
 class HSDataset(TensorDataset):
     def __init__(
-        self, dataframe, device="cpu", descriptor_list=["phi"], synthetic_samples=False
+        self,
+        dataframe,
+        device="cpu",
+        descriptor_list=["phi"],
+        synthetic_samples=False,
+        downsample=0,
     ):
         print("Creating Dataset")
         print("Descriptor List: ", descriptor_list)
@@ -38,10 +43,44 @@ class HSDataset(TensorDataset):
 
         if synthetic_samples:
 
-            raise NotImplementedError("Synthetic samples not implemented yet.")
+            if synthetic_samples["rotational"]:
+
+                # Create a new samples by rotating the original sample, ie switching x and y
+                rotated_samples = []
+                for sample in samples:
+                    new_sample = sample.clone()
+                    new_sample[:, 0] = sample[:, 1]
+                    new_sample[:, 1] = sample[:, 0]
+                    rotated_samples.append(new_sample)
+                samples += rotated_samples
+                descriptors += descriptors
+
+            if synthetic_samples["shuffling"]:
+                # Create synthetic samples by shuffling the original samples
+                shuffled_samples = []
+                new_descriptors = []
+                for i in range(
+                    synthetic_samples["shuffling"]
+                ):  # Add one permutation for each shuffle
+                    for sample in samples:
+                        shuffled_samples.append(sample[torch.randperm(sample.size(0))])
+                    new_descriptors += descriptors
+
+                samples += shuffled_samples
+                descriptors += new_descriptors
+
+        if downsample:
+            new_samples = []
+            for sample in samples:
+                downsample_integer = int(sample.shape[1] * downsample)
+                pick_index = torch.randperm(sample.shape[1])[:downsample_integer]
+                _sample = sample[:, pick_index]
+                new_samples.append(_sample)
+            samples = new_samples
 
         self.x = torch.concat(descriptors)  # Descriptors are the input.
         self.y = torch.concat(samples)  # Sample point cloud is the target
+        self.samples = samples
 
     def __len__(self):
         return len(self.y)

@@ -24,7 +24,6 @@ class HSGeneratorLoss(nn.Module):
         radius_loss,
         grid_density_loss,
         physical_feasibility_loss,
-        scale_params,
         collision_loss_coefficient,
     ):
         super().__init__()
@@ -33,7 +32,6 @@ class HSGeneratorLoss(nn.Module):
         self.radius_loss = radius_loss
         self.grid_density_loss = grid_density_loss
         self.physical_feasibility_loss = physical_feasibility_loss
-        self.scale_params = scale_params
         self.collision_loss_coefficient = collision_loss_coefficient
 
         # For logging, save the results
@@ -43,20 +41,6 @@ class HSGeneratorLoss(nn.Module):
         self.prev_physical_feasibility_loss = torch.tensor([0])
 
         self.mse = MSELoss()
-
-    @staticmethod
-    def make_subgrid_mask(lims_x, lims_y, n_x, n_y):
-        lox = lims_x[0]
-        hix = lims_x[1]
-
-        loy = lims_y[0]
-        hiy = lims_y[1]
-
-        # Break x-y in evenly distributed grid squares
-
-        grid_x = torch.linspace(lox, hix, steps=n_x - 1)
-
-        grid_y = torch.linspace(loy, hiy, steps=n_y - 1)
 
     def _radius_loss(self, real_images, fake_images):
         # Loss based on sum of radiuses
@@ -74,16 +58,10 @@ class HSGeneratorLoss(nn.Module):
 
     def _physical_feasibility_loss(self, fake_points, collision_loss_coefficient=1):
 
-        scale_params = self.scale_params
-
-        x_min, x_max = scale_params["x"]
-        y_min, y_max = scale_params["y"]
-        r_min, r_max = scale_params["r"]
-
         # Rescale the coordinates and radii back to their original scales
-        x = fake_points[:, :, 0] * (x_max - x_min) + x_min
-        y = fake_points[:, :, 1] * (y_max - y_min) + y_min
-        radii = fake_points[:, :, 2] * (r_max - r_min) + r_min
+        x = fake_points[:, :, 0]
+        y = fake_points[:, :, 1]
+        radii = fake_points[:, :, 2]
 
         # Combine rescaled values into one tensor
         rescaled_points = torch.stack((x, y, radii), dim=2)
@@ -95,10 +73,14 @@ class HSGeneratorLoss(nn.Module):
         # Calculate the pairwise distance matrix
         n = fake_points.shape[1]
         dist = torch.cdist(rescaled_points[:, :, :2], rescaled_points[:, :, :2])
-        # Calculate the sum of the radii
-        radii = rescaled_points[:, :, 2].unsqueeze(1) + rescaled_points[
-            :, :, 2
-        ].unsqueeze(2)
+        # Calculate the sum of the radii of the two points
+        # TODO: This is not correct as the points and radii are scaled with different measures
+        # TODO: Think of this
+        # NOTE: Will not work correctly as this will result in points being counted as overlapping even if they are not overlapping
+        radii = (
+            rescaled_points[:, :, 2].unsqueeze(1).abs()
+            + rescaled_points[:, :, 2].unsqueeze(2).abs()
+        )
 
         # Calculate the collision matrix
         # collision_matrix = radii > dist
@@ -120,7 +102,7 @@ class HSGeneratorLoss(nn.Module):
         return overlap_distance * collision_loss_coefficient
 
     def _gan_loss(self, fake_outputs, real_labels):
-        return self.gan_loss_fn(fake_outputs, real_labels)
+        return -self.gan_loss_fn(fake_outputs, real_labels)
 
     @staticmethod
     def _non_saturating_gan_loss(fake_outputs):
@@ -141,12 +123,14 @@ class HSGeneratorLoss(nn.Module):
         real_xq = torch.tensor(  # TODO: Make this a parameter
             [0.05, 0.25, 0.50, 0.75, 0.95], device=fake_images.device
         )  # NOTE: Tensors normalized from 0 to 1 so the quantiles should match
+        # TODO: Test this
 
         # Y distribution
         fake_yq = torch.quantile(fake_images[:, :, 1], quantiles)
         real_yq = torch.tensor(  # TODO: Make this a parameter
             [0.05, 0.25, 0.50, 0.75, 0.95], device=fake_images.device
         )  # NOTE: Tensors normalized from 0 to 1 so the quantiles should match
+        # TODO: Test this
 
         # Also do a xy loss
 
@@ -189,6 +173,54 @@ class HSGeneratorLoss(nn.Module):
             loss += self.prev_grid_density_loss
 
         return loss
+
+
+class CryinGANDiscriminatorLoss(nn.Module):
+    def __init__(self, mu=10):
+        super().__init__()
+        self.mu = mu
+        self.bce = BCELoss()
+
+    def forward(
+        self,
+        real_outputs,
+        fake_outputs,
+        real_images,
+        fake_images,
+        discriminator,
+    ):
+        # Discriminator loss
+        real_labels = torch.ones_like(real_outputs)
+        fake_labels = torch.zeros_like(fake_outputs)
+
+        d_loss = self.bce(real_outputs, real_labels) + self.bce(
+            fake_outputs, fake_labels
+        )
+
+        # Gradient penalty term
+        alpha = torch.rand(real_images.size(0), 1, 1).to(real_images.device)
+        interpolates_coord = alpha * real_images + (1 - alpha) * fake_images
+        interpolates_coord.requires_grad_(True)
+        d_interpolates_coord = discriminator(interpolates_coord)
+
+        grad_outputs_coord = torch.ones(d_interpolates_coord.size()).to(
+            real_images.device
+        )
+
+        gradients = torch.autograd.grad(
+            outputs=d_interpolates_coord,
+            inputs=interpolates_coord,
+            grad_outputs=grad_outputs_coord,
+            create_graph=True,
+            retain_graph=True,
+            only_inputs=True,
+        )[0]
+
+        gradient_penalty = self.mu * ((gradients.norm(2, dim=1) - 1) ** 2).mean()
+        # Total loss
+        total_loss = d_loss + gradient_penalty
+
+        return total_loss
 
 
 def build_loss_fn(**loss_config):

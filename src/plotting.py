@@ -8,7 +8,7 @@ def plot_pointcloud(pointcloud, ax=None, plot_radius=True):
     ys = pointcloud[:, 1]
 
     if plot_radius:
-        rs = pointcloud[:, 2] + 0.1  # Add 0.1 to the radius to make it visible
+        rs = pointcloud[:, 2]
 
     if plot_radius:
         ax.scatter(xs, ys, c=rs, s=rs * 30, alpha=0.5)
@@ -60,13 +60,13 @@ def plot_sample_distributions(
     ax[1].legend()
 
     if plot_radius:
-        rs_fake = sample_generated_y[:, :, 2]
         rs_real = sample_y[:, :, 2]
+        rs_fake = sample_generated_y[:, :, 2]
 
-        ax[-1].hist(rs_real.numpy().flatten(), bins=20, alpha=0.5, label="Real R")
-        ax[-1].hist(rs_fake.numpy().flatten(), bins=20, alpha=0.5, label="Fake R")
-        ax[-1].set_title("R Distribution")
-        ax[-1].legend()
+        ax[2].hist(rs_real.numpy().flatten(), bins=20, alpha=0.5, label="Real R")
+        ax[2].hist(rs_fake.numpy().flatten(), bins=20, alpha=0.5, label="Fake R")
+        ax[2].set_title("R Distribution")
+        ax[2].legend()
 
     if plot_distances:
         import torch

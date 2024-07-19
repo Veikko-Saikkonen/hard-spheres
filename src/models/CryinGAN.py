@@ -6,7 +6,6 @@ class Generator(nn.Module):
     def __init__(
         self, kernel_size, stride, rand_features=64, out_dimensions=3, out_samples=2000
     ):
-
         super().__init__()
 
         self.rand_features = rand_features
@@ -61,7 +60,7 @@ class Generator(nn.Module):
                 nn.init.uniform_(layer.bias, a=-0.1, b=0.1)
 
     def generate_noise(self, batch_size):
-        return randn(
+        return rand(
             (batch_size, self.rand_features), device=self.model[0].weight.device
         )
 
@@ -82,7 +81,7 @@ class Discriminator2D(nn.Module):
             nn.Flatten(1, -1),
             nn.Unflatten(1, (input_channels, in_samples)),
             # Unflatten from 3x2000 to 3x125x16
-            nn.Unflatten(input_channels, (in_samples // 16, 16)),
+            nn.Unflatten(2, (in_samples // 16, 16)),
             # Convolutional layer 1
             nn.Conv2d(input_channels, 256, kernel_size=(4, 4), stride=2, padding=1),
             nn.LeakyReLU(0.2, inplace=True),
@@ -90,20 +89,20 @@ class Discriminator2D(nn.Module):
             nn.Conv2d(256, 256, kernel_size=(4, 4), stride=2, padding=1),
             nn.LeakyReLU(0.2, inplace=True),
             # # Convolutional layer 3
-            nn.Conv2d(256, 128, kernel_size=(4, 4), stride=2, padding=1),
+            nn.Conv2d(256, 256, kernel_size=(4, 4), stride=2, padding=1),
             nn.LeakyReLU(0.2, inplace=True),
             # # Average Pooling
-            nn.AdaptiveAvgPool2d((1, 1)),
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten(1, -1),
         )
 
         self.fc_layers = nn.Sequential(
             # Fully connected layers
-            nn.Linear(128, 256),
+            nn.Linear(256, 128),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(256, 256),
+            nn.Linear(128, 10),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(256, 10),
-            nn.AdaptiveAvgPool1d(1),
+            nn.Linear(10, 1),
             nn.Sigmoid(),
         )
 
@@ -115,6 +114,7 @@ class Discriminator2D(nn.Module):
 
 
 class CCCGDiscriminator(nn.Module):
+    # Inspired by: https://dl-acm-org.libproxy.aalto.fi/doi/abs/10.1145/3532213.3532218
     def __init__(self, input_channels, in_samples=2000):
         super().__init__()
 
@@ -213,7 +213,7 @@ class CCCGenerator(nn.Module):
         #         nn.init.uniform_(layer.bias, a=-0.1, b=0.1)
 
     def generate_noise(self, batch_size):
-        return randn(
+        return rand(
             (batch_size, self.rand_features), device=self.model[0].weight.device
         )
 

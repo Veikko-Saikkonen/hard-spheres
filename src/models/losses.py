@@ -102,7 +102,7 @@ class HSGeneratorLoss(nn.Module):
         return overlap_distance * collision_loss_coefficient
 
     def _gan_loss(self, fake_outputs, real_labels):
-        return -self.gan_loss_fn(fake_outputs, real_labels)
+        return self.gan_loss_fn(fake_outputs, real_labels)
 
     @staticmethod
     def _non_saturating_gan_loss(fake_outputs):

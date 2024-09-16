@@ -55,14 +55,10 @@ class GAN(nn.Module):
 
         self.d_optimizer = build_optimizer_fn_from_config(
             run_params["training"]["optimizer_d"]
-        )(
-            self.discriminator.parameters()
-        )  # AdamHD(params=self.generator.parameters(), lr=0.0002)
+        )(self.discriminator.parameters())
         self.g_optimizer = build_optimizer_fn_from_config(
             run_params["training"]["optimizer_g"]
-        )(
-            self.generator.parameters()
-        )  #
+        )(self.generator.parameters())
 
         if self.trainset.y.shape[-1] == 3:
             self.plot_radius = True
@@ -214,6 +210,7 @@ class GAN(nn.Module):
                     self.discriminator,
                 )
             else:
+                # Wasserstein GAN
                 d_loss = self.d_criterion(real_outputs, real_labels) + self.d_criterion(
                     fake_outputs, fake_labels
                 )
@@ -250,7 +247,7 @@ class GAN(nn.Module):
             g_loss.backward()
 
             g_grad_norm = torch.nn.utils.clip_grad_norm_(
-                self.generator.parameters(), 20, error_if_nonfinite=True
+                self.generator.parameters(), 10_000, error_if_nonfinite=True
             )  # Clip gradients
             self.g_optimizer.step()
 

@@ -1,15 +1,24 @@
 from torch import nn
 from torch import rand, randn
+import torch
 
 
 class Generator(nn.Module):
     def __init__(
-        self, kernel_size, stride, rand_features=64, out_dimensions=3, out_samples=2000
+        self,
+        kernel_size,
+        stride,
+        rand_features=64,
+        out_dimensions=3,
+        out_samples=2000,
+        fix_r=False,
     ):
         super().__init__()
 
         self.rand_features = rand_features
         out_features = out_samples * out_dimensions
+
+        self.fix_r = fix_r
 
         self.model = nn.Sequential(
             # TODO: Add this section to take descriptors as input instead of random noise
@@ -52,12 +61,12 @@ class Generator(nn.Module):
             nn.Sigmoid(),
         )
 
-        for layer in self.model:
+        for layer in self.model:  # TODO: check on this later
             if hasattr(layer, "weight"):
-                nn.init.uniform_(layer.weight, a=-0.33, b=0.33)
+                nn.init.uniform_(layer.weight, a=-0.15, b=0.15)
 
             if hasattr(layer, "bias"):
-                nn.init.uniform_(layer.bias, a=-0.1, b=0.1)
+                nn.init.uniform_(layer.bias, a=-0.05, b=0.05)
 
     def generate_noise(self, batch_size):
         return rand(
@@ -68,8 +77,15 @@ class Generator(nn.Module):
         # TODO: Use x in the model instead of purely random noise
 
         noise = self.generate_noise(x.size(0))
-
-        return self.model(noise)
+        out = self.model(noise)
+        if self.fix_r:
+            if out.size(-1) < 3:
+                out = torch.cat(
+                    [out, self.fix_r * torch.ones_like(out[..., 0:1])], dim=-1
+                )
+            else:
+                out[..., -1] = self.fix_r
+        return out
 
 
 class Discriminator2D(nn.Module):
@@ -152,6 +168,7 @@ class CCCGDiscriminator(nn.Module):
         # Finally flatten and pass through fully connected layers
         conv_output_flat = conv_output.view(conv_output.size(0), -1)
         output = self.fc_layers(conv_output_flat)
+
         return output
 
 
@@ -164,16 +181,20 @@ class CCCGenerator(nn.Module):
         out_dimensions=3,
         out_samples=2000,
         latent_dim=6,
+        fix_r=False,
     ):
 
         # Inspired by: https://dl-acm-org.libproxy.aalto.fi/doi/abs/10.1145/3532213.3532218
+        # 'Energy-constrained Crystals Wasserstein GAN for the inverse design of crystal structures',
+        # @inproceedings{10.1145/3532213.3532218, author = {Hu, Peiyao and Ge, Binjing and Liu, Yirong and Huang, Wei}, title = {Energy-constrained Crystals Wasserstein GAN for the inverse design of crystal structures}, year = {2022}, isbn = {9781450396110}, publisher = {Association for Computing Machinery}, address = {New York, NY, USA}, url = {https://doi-org.libproxy.aalto.fi/10.1145/3532213.3532218}, doi = {10.1145/3532213.3532218}, booktitle = {Proceedings of the 8th International Conference on Computing and Artificial Intelligence}, pages = {24–31}, numpages = {8}, keywords = {machine learning, generative model, Materials, Crystal structure, : Crystals}, location = {Tianjin, China}, series = {ICCAI '22} }
 
         super().__init__()
 
         self.rand_features = rand_features
-        latent_dim = 6
         # latent_features = 256 * 40  # From the paper, samples x latent_dim
         latent_features = out_samples * latent_dim  # Samples x latent_dim
+
+        self.fix_r = fix_r
 
         self.model = nn.Sequential(
             ## First fully connected layer
@@ -205,12 +226,12 @@ class CCCGenerator(nn.Module):
             nn.Flatten(1, 2),
         )
 
-        # for layer in self.model: # TODO: check on this later
-        #     if hasattr(layer, "weight"):
-        #         nn.init.uniform_(layer.weight, a=-0.33, b=0.33)
+        for layer in self.model:  # TODO: check on this later
+            if hasattr(layer, "weight"):
+                nn.init.uniform_(layer.weight, a=-0.5, b=0.5)
 
-        #     if hasattr(layer, "bias"):
-        #         nn.init.uniform_(layer.bias, a=-0.1, b=0.1)
+            if hasattr(layer, "bias"):
+                nn.init.uniform_(layer.bias, a=0, b=0.5)
 
     def generate_noise(self, batch_size):
         return rand(
@@ -222,4 +243,14 @@ class CCCGenerator(nn.Module):
 
         noise = self.generate_noise(x.size(0))
 
-        return self.model(noise)
+        out = self.model(noise)
+
+        if self.fix_r:
+            if out.size(-1) < 3:
+                out = torch.cat(
+                    [out, self.fix_r * torch.ones_like(out[..., 0:1])], dim=-1
+                )
+            else:
+                out[..., -1] = self.fix_r
+
+        return out

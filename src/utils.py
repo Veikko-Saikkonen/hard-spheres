@@ -97,7 +97,7 @@ def read_raw_sample(file, skiprows=2, sep=r"\s+"):
     return dataframe, metadata
 
 
-def load_raw_data(path="data", phi=[0.72]):
+def load_raw_data(path="data", phi=[0.72], subpath=""):
 
     if len(phi) != len(set(phi)):
         raise ValueError("Phi values must be unique")
@@ -105,7 +105,7 @@ def load_raw_data(path="data", phi=[0.72]):
     path = Path(path)
     search_paths = []
     for p in phi:
-        search_paths.append(path / f"phi-{p:.2f}")
+        search_paths.append(path / f"phi-{p:.2f}" / subpath)
     files = []
     for sp in search_paths:
         new_files = glob(str(sp / "sample-*"))
@@ -129,3 +129,16 @@ def load_raw_data(path="data", phi=[0.72]):
     metadata = pd.concat(metadata)
 
     return files, dataframe, metadata
+
+
+def mock_function(a: int, b: str, **kwargs) -> int:
+    """_summary_
+
+    Args:
+        a (int): _description_
+        b (str): _description_
+
+    Returns:
+        int: _description_
+    """
+    return a + int(b)

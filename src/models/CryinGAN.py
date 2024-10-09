@@ -188,18 +188,45 @@ class Discriminator2D(nn.Module):
 
 class CCCGDiscriminator(nn.Module):
     # Inspired by: https://dl-acm-org.libproxy.aalto.fi/doi/abs/10.1145/3532213.3532218
-    def __init__(self, input_channels, in_samples=2000):
+    # Energy-constrained Crystals Wasserstein GAN for the inverse design of crystal structures
+    def __init__(
+        self,
+        input_channels,
+        in_samples=2000,
+        kernel_size=(1, 1),
+        channels_coefficient=1,
+    ):
         super().__init__()
+
+        # TODO: Make parameters configurable, need bigger model
 
         self.main = nn.Sequential(
             # Convolutional layer 2
-            nn.Conv2d(input_channels, 64, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(
+                input_channels,
+                int(channels_coefficient * 64),
+                kernel_size=kernel_size,
+                stride=1,
+                padding=0,
+            ),
             nn.LeakyReLU(0.2, inplace=True),
             # # # Convolutional layer 2
-            nn.Conv2d(64, 128, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(
+                int(64 * channels_coefficient),
+                int(128 * channels_coefficient),
+                kernel_size=kernel_size,
+                stride=1,
+                padding=0,
+            ),
             nn.LeakyReLU(0.2, inplace=True),
             # Convolutional layer 3
-            nn.Conv2d(128, 256, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(
+                int(128 * channels_coefficient),
+                int(256 * channels_coefficient),
+                kernel_size=kernel_size,
+                stride=1,
+                padding=0,
+            ),
             nn.LeakyReLU(0.2, inplace=True),
             # nn.AvgPool2d((500, 1)),
             nn.AdaptiveAvgPool2d(1),
@@ -209,7 +236,7 @@ class CCCGDiscriminator(nn.Module):
         self.fc_layers = nn.Sequential(
             # NOTE: This may not be the best way to reduce the size of the tensor
             # Fully connected layers
-            nn.Linear(256, 200),
+            nn.Linear(256 * channels_coefficient, 200),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Linear(200, 10),
             nn.LeakyReLU(0.2, inplace=True),
@@ -238,6 +265,7 @@ class CCCGenerator(nn.Module):
         out_dimensions=3,
         out_samples=2000,
         latent_dim=6,
+        clip_output: tuple = False,
         fix_r=False,
     ):
 
@@ -247,6 +275,7 @@ class CCCGenerator(nn.Module):
 
         super().__init__()
 
+        self.clip_output = clip_output
         self.rand_features = rand_features
         # latent_features = 256 * 40  # From the paper, samples x latent_dim
         latent_features = out_samples * latent_dim  # Samples x latent_dim
@@ -265,30 +294,39 @@ class CCCGenerator(nn.Module):
             nn.Unflatten(1, (latent_dim, out_samples, 1)),
             # # Transposed Convolution 1
             nn.ConvTranspose2d(
-                latent_dim, 256, kernel_size=(1, out_dimensions), stride=1, padding=0
+                latent_dim, 1028, kernel_size=(1, out_dimensions), stride=1, padding=0
             ),
-            nn.BatchNorm2d(256),
+            nn.BatchNorm2d(1028),
             nn.ReLU(True),
             # # # Transposed Convolution 2
+            nn.ConvTranspose2d(1028, 256, kernel_size=(1, 1), stride=1, padding=0),
+            nn.BatchNorm2d(256),
+            nn.ReLU(True),
+            # # Transposed Convolution 3
             nn.ConvTranspose2d(256, 128, kernel_size=(1, 1), stride=1, padding=0),
             nn.BatchNorm2d(128),
             nn.ReLU(True),
-            # # Transposed Convolution 3
-            nn.ConvTranspose2d(128, 64, kernel_size=(1, 1), stride=1, padding=0),
-            nn.BatchNorm2d(64),
-            nn.ReLU(True),
             # # Transposed Convolution 4 to get to 3 channels, 2000 samples and 1 feature
-            nn.ConvTranspose2d(64, 1, kernel_size=(1, 1), stride=1, padding=0),
+            nn.ConvTranspose2d(128, 1, kernel_size=(1, 1), stride=1, padding=0),
             nn.Sigmoid(),
             nn.Flatten(1, 2),
         )
 
         for layer in self.model:  # TODO: check on this later
             if hasattr(layer, "weight"):
-                nn.init.uniform_(layer.weight, a=-0.5, b=0.5)
+                nn.init.uniform_(layer.weight, a=-0.3, b=0.3)
 
             if hasattr(layer, "bias"):
-                nn.init.uniform_(layer.bias, a=0, b=0.5)
+                nn.init.uniform_(layer.bias, a=-0.15, b=0.15)
+
+    def _get_clip_parameters(self):
+        clip_output_min = torch.as_tensor(
+            self.clip_output[0], device=self.model[0].weight.device
+        )
+        clip_output_max = torch.as_tensor(
+            self.clip_output[1], device=self.model[0].weight.device
+        )
+        return clip_output_min, clip_output_max
 
     def generate_noise(self, batch_size):
         return rand(
@@ -309,5 +347,10 @@ class CCCGenerator(nn.Module):
                 )
             else:
                 out[..., -1] = self.fix_r
+
+        if self.clip_output:
+
+            clip_output_min, clip_output_max = self._get_clip_parameters()
+            out = torch.clamp(out, clip_output_min, clip_output_max)
 
         return out

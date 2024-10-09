@@ -11,7 +11,10 @@ class Generator(nn.Module):
         rand_features=64,
         out_dimensions=3,
         out_samples=2000,
+        channel_coefficient=1,
+        clip_output: tuple = False,
         fix_r=False,
+        r_options=[],
     ):
         super().__init__()
 
@@ -19,6 +22,12 @@ class Generator(nn.Module):
         out_features = out_samples * out_dimensions
 
         self.fix_r = fix_r
+        self.out_samples = out_samples
+        self.out_dimensions = out_dimensions
+
+        self.r_options = r_options
+        self.n_r_options = len(r_options)
+        self.clip_output = clip_output
 
         self.model = nn.Sequential(
             # TODO: Add this section to take descriptors as input instead of random noise
@@ -31,47 +40,86 @@ class Generator(nn.Module):
                 in_features=rand_features, out_features=out_features
             ),  # 12k, half size
             nn.ReLU(True),
-            # # Reshape to (128, 264, 1, 1)
-            # nn.Unflatten(1, (128, 264, 1)),
             nn.Unflatten(1, (out_dimensions, out_samples, 1)),
             # # Transposed Convolution 1
             nn.ConvTranspose2d(
-                out_dimensions, 256, kernel_size=kernel_size, stride=(1, 3), padding=0
+                out_dimensions,
+                32 * channel_coefficient,
+                kernel_size=kernel_size,
+                stride=(1, 3),  # NOTE: why stride this way?
+                padding=0,
             ),
-            nn.BatchNorm2d(256),
+            nn.BatchNorm2d(32 * channel_coefficient),
             nn.ReLU(True),
             # # # Transposed Convolution 2
             nn.ConvTranspose2d(
-                256, 512, kernel_size=kernel_size, stride=stride, padding=1
+                32 * channel_coefficient,
+                64 * channel_coefficient,
+                kernel_size=kernel_size,
+                stride=stride,
+                padding=1,
             ),
-            nn.BatchNorm2d(512),
+            nn.BatchNorm2d(64 * channel_coefficient),
             nn.ReLU(True),
             # # Transposed Convolution 3
             nn.ConvTranspose2d(
-                512, 256, kernel_size=kernel_size, stride=stride, padding=1
+                64 * channel_coefficient,
+                32 * channel_coefficient,
+                kernel_size=kernel_size,
+                stride=stride,
+                padding=1,
             ),
-            nn.BatchNorm2d(256),
+            nn.BatchNorm2d(32 * channel_coefficient),
             nn.ReLU(True),
-            # # Transposed Convolution 4 to get to 3 channels, 2000 samples and 1 feature
+            # # Transposed Convolution 4 to get to 'out_dimensions' channels, 'out_samples' samples and 1 feature
             nn.ConvTranspose2d(
-                256, out_dimensions, kernel_size=(1, 1), stride=(1, 1), padding=1
+                32 * channel_coefficient,
+                out_dimensions,
+                kernel_size=(1, 1),
+                stride=(1, 1),
+                padding=1,
             ),
             nn.Flatten(1, -1),
-            nn.Unflatten(1, (out_samples, out_dimensions)),
+            nn.Unflatten(1, (-1, out_dimensions)),
             nn.Sigmoid(),
         )
 
         for layer in self.model:  # TODO: check on this later
             if hasattr(layer, "weight"):
-                nn.init.uniform_(layer.weight, a=-0.15, b=0.15)
+                nn.init.uniform_(layer.weight, a=-0.3, b=0.3)
 
             if hasattr(layer, "bias"):
-                nn.init.uniform_(layer.bias, a=-0.05, b=0.05)
+                nn.init.uniform_(layer.bias, a=-0.15, b=0.15)
+
+    def _get_clip_parameters(self):
+        clip_output_min = torch.as_tensor(
+            self.clip_output[0], device=self.model[0].weight.device
+        )
+        clip_output_max = torch.as_tensor(
+            self.clip_output[1], device=self.model[0].weight.device
+        )
+        return clip_output_min, clip_output_max
 
     def generate_noise(self, batch_size):
         return rand(
             (batch_size, self.rand_features), device=self.model[0].weight.device
         )
+
+    def _softmax_radius_dimensions(self, x: torch.FloatTensor):
+
+        # After the model has created the output, do softmax over the last dimensions to set radius
+
+        r = torch.softmax(x[:, :, -self.n_r_options :])
+
+        # Now we have [batch, n_samples, n_categories]
+        # Map to a scalar radius
+        # self.radius_options has options like [1,2,3], corresponding to one hot
+
+        r = self.r_options * r
+
+        x = torch.stack([x[:, :, : self.out_dimensions - 1], r], 0)
+
+        return x
 
     def forward(self, x):
         # TODO: Use x in the model instead of purely random noise
@@ -85,6 +133,15 @@ class Generator(nn.Module):
                 )
             else:
                 out[..., -1] = self.fix_r
+
+        # Slice the output to the desired number of samples and dimensions
+        out = out[:, : self.out_samples, :]
+
+        if self.clip_output:
+
+            clip_output_min, clip_output_max = self._get_clip_parameters()
+            out = torch.clamp(out, clip_output_min, clip_output_max)
+
         return out
 
 

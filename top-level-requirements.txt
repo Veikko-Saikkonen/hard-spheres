@@ -21,3 +21,4 @@ tqdm
 xgboost
 pickleshare
 git+https://github.com/gbaydin/hypergradient-descent.git # Slow
+pynndescent

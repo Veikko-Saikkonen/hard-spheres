@@ -65,6 +65,8 @@ class GAN(nn.Module):
         else:
             self.plot_radius = False
 
+        # Register dataset with mlflow
+
     def train_n_epochs(
         self, epochs, batch_size=None, experiment_name=None, run_name=None, comment=None
     ):
@@ -95,14 +97,32 @@ class GAN(nn.Module):
         else:
             run_params = {"run_name": run_name}
 
-        dataloader = DataLoader(self.trainset, batch_size=batch_size, shuffle=True)
-
         if comment is not None:
             run_params["description"] = comment
         run_params["log_system_metrics"] = run_params.get(
             "log_system_metrics", True
         )  # Log system metrics by default
         with mlflow.start_run(**run_params):
+            # Log dataset
+            ml_data_train = mlflow.data.from_numpy(
+                features=self.trainset.x.detach().cpu().numpy(),
+                targets=self.trainset.y.detach().cpu().numpy(),
+                name="trainset",
+            )
+            ml_data_test = mlflow.data.from_numpy(
+                features=self.testset.x.detach().cpu().numpy(),
+                targets=self.testset.y.detach().cpu().numpy(),
+                name="testset",
+            )
+            mlflow.log_input(ml_data_train, context="trainset")
+            mlflow.log_input(ml_data_test, context="testset")
+
+            # Create dataloader
+            dataloader = DataLoader(
+                self.trainset, batch_size=batch_size, shuffle=True, drop_last=True
+            )
+
+            # Log run parameters
             mlflow.log_params(self.run_params)
             log_nested_dict(self.run_params)
 
@@ -168,7 +188,9 @@ class GAN(nn.Module):
             batch_size = self.run_params["training"]["batch_size"]
 
         if dataloader is None:
-            dataloader = DataLoader(self.trainset, batch_size=batch_size, shuffle=True)
+            dataloader = DataLoader(
+                self.trainset, batch_size=batch_size, shuffle=True, drop_last=True
+            )
 
         self.generator.train()
         self.discriminator.train()
@@ -185,12 +207,13 @@ class GAN(nn.Module):
             real_labels = (
                 torch.ones(real_images.size(0), 1).to(self.device) - 0.1
             )  # NOTE: A hack from 'Synthesising realistic 2D microstructures of unidirectional fibre-reinforced composites with a generative adversarial network'
-            fake_labels = torch.zeros(real_images.size(0), 1).to(
-                self.device
+            fake_labels = (
+                torch.zeros(real_images.size(0), 1).to(self.device) + 0.1
             )  # NOTE: The hack could be used in reverse
 
             # Train the discriminator
             self.generator.eval()
+            self.discriminator.train()
             self.d_optimizer.zero_grad()
 
             real_outputs = self.discriminator(real_images)
@@ -218,7 +241,7 @@ class GAN(nn.Module):
             d_loss.backward()
 
             d_grad_norm = torch.nn.utils.clip_grad_norm_(
-                self.discriminator.parameters(), 20, error_if_nonfinite=True
+                self.discriminator.parameters(), 50, error_if_nonfinite=True
             )  # Clip gradients
 
             # Give the generator a headstart
@@ -247,7 +270,7 @@ class GAN(nn.Module):
             g_loss.backward()
 
             g_grad_norm = torch.nn.utils.clip_grad_norm_(
-                self.generator.parameters(), 10_000, error_if_nonfinite=True
+                self.generator.parameters(), 50, error_if_nonfinite=True
             )  # Clip gradients
             self.g_optimizer.step()
 
@@ -317,6 +340,7 @@ class GAN(nn.Module):
         g_physical_feasibility_loss = (
             self.g_criterion.prev_physical_feasibility_loss.item()
         )
+        g_loss_distance = self.g_criterion.prev_distance_loss.item()
 
         mlflow.log_metric("D_loss", mean_loss_d, step=epoch)
         mlflow.log_metric("G_loss", mean_loss_g, step=epoch)
@@ -324,6 +348,7 @@ class GAN(nn.Module):
         mlflow.log_metric("G_Radius_loss", g_loss_radius, step=epoch)
         mlflow.log_metric("G_GAN_loss", g_loss_gan, step=epoch)
         mlflow.log_metric("G_Feasibility_loss", g_physical_feasibility_loss, step=epoch)
+        mlflow.log_metric("G_Distance_loss", g_loss_distance, step=epoch)
 
         # Log gradients with mlflow
 

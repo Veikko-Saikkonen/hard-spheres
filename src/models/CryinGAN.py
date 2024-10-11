@@ -7,6 +7,7 @@ class Generator(nn.Module):
     def __init__(
         self,
         kernel_size,
+        first_layer_kernel_size,
         stride,
         rand_features=64,
         out_dimensions=3,
@@ -17,9 +18,10 @@ class Generator(nn.Module):
         r_options=[],
     ):
         super().__init__()
+        # paper: https://arxiv.org/pdf/2404.06734
 
         self.rand_features = rand_features
-        out_features = out_samples * out_dimensions
+        out_features = int(out_samples * (out_dimensions) / 2)
 
         self.fix_r = fix_r
         self.out_samples = out_samples
@@ -40,12 +42,13 @@ class Generator(nn.Module):
                 in_features=rand_features, out_features=out_features
             ),  # 12k, half size
             nn.ReLU(True),
-            nn.Unflatten(1, (out_dimensions, out_samples, 1)),
+            # nn.Unflatten(1, (out_dimensions, out_samples, 1)),
+            nn.Unflatten(1, (-1, out_samples)),
             # # Transposed Convolution 1
             nn.ConvTranspose2d(
                 out_dimensions,
                 32 * channel_coefficient,
-                kernel_size=kernel_size,
+                kernel_size=first_layer_kernel_size,
                 stride=(1, 3),  # NOTE: why stride this way?
                 padding=0,
             ),
@@ -54,30 +57,30 @@ class Generator(nn.Module):
             # # # Transposed Convolution 2
             nn.ConvTranspose2d(
                 32 * channel_coefficient,
-                64 * channel_coefficient,
+                16 * channel_coefficient,
                 kernel_size=kernel_size,
                 stride=stride,
-                padding=1,
+                padding=0,
             ),
-            nn.BatchNorm2d(64 * channel_coefficient),
+            nn.BatchNorm2d(16 * channel_coefficient),
             nn.ReLU(True),
             # # Transposed Convolution 3
             nn.ConvTranspose2d(
-                64 * channel_coefficient,
-                32 * channel_coefficient,
+                16 * channel_coefficient,
+                8 * channel_coefficient,
                 kernel_size=kernel_size,
                 stride=stride,
-                padding=1,
+                padding=0,
             ),
-            nn.BatchNorm2d(32 * channel_coefficient),
+            nn.BatchNorm2d(8 * channel_coefficient),
             nn.ReLU(True),
             # # Transposed Convolution 4 to get to 'out_dimensions' channels, 'out_samples' samples and 1 feature
             nn.ConvTranspose2d(
-                32 * channel_coefficient,
+                8 * channel_coefficient,
                 out_dimensions,
-                kernel_size=(1, 1),
+                kernel_size=kernel_size,
                 stride=(1, 1),
-                padding=1,
+                padding=0,
             ),
             nn.Flatten(1, -1),
             nn.Unflatten(1, (-1, out_dimensions)),
@@ -204,7 +207,7 @@ class CCCGDiscriminator(nn.Module):
             # Convolutional layer 2
             nn.Conv2d(
                 input_channels,
-                int(channels_coefficient * 64),
+                64 * (2 ** (channels_coefficient - 1)),
                 kernel_size=kernel_size,
                 stride=1,
                 padding=0,
@@ -212,8 +215,8 @@ class CCCGDiscriminator(nn.Module):
             nn.LeakyReLU(0.2, inplace=True),
             # # # Convolutional layer 2
             nn.Conv2d(
-                int(64 * channels_coefficient),
-                int(128 * channels_coefficient),
+                int(64 * (2 ** (channels_coefficient - 1))),
+                int(128 * (2 ** (channels_coefficient - 1))),
                 kernel_size=kernel_size,
                 stride=1,
                 padding=0,
@@ -221,26 +224,26 @@ class CCCGDiscriminator(nn.Module):
             nn.LeakyReLU(0.2, inplace=True),
             # Convolutional layer 3
             nn.Conv2d(
-                int(128 * channels_coefficient),
-                int(256 * channels_coefficient),
+                int(128 * (2 ** (channels_coefficient - 1))),
+                int(256 * (2 ** (channels_coefficient - 1))),
                 kernel_size=kernel_size,
                 stride=1,
                 padding=0,
             ),
             nn.LeakyReLU(0.2, inplace=True),
-            # nn.AvgPool2d((500, 1)),
             nn.AdaptiveAvgPool2d(1),
+            # nn.AdaptiveMaxPool2d(1),
             nn.Flatten(1, -1),
         )
 
         self.fc_layers = nn.Sequential(
-            # NOTE: This may not be the best way to reduce the size of the tensor
             # Fully connected layers
-            nn.Linear(256 * channels_coefficient, 200),
+            # NOTE: Adjusted the width of the layers to the nearest power of 2 in comparison to the original paper
+            nn.Linear(256 * (2 ** (channels_coefficient - 1)), 1024),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(200, 10),
+            nn.Linear(1024, 256),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(10, 1),
+            nn.Linear(256, 1),
             nn.Sigmoid(),
         )
 
@@ -294,27 +297,27 @@ class CCCGenerator(nn.Module):
             nn.Unflatten(1, (latent_dim, out_samples, 1)),
             # # Transposed Convolution 1
             nn.ConvTranspose2d(
-                latent_dim, 1028, kernel_size=(1, out_dimensions), stride=1, padding=0
+                latent_dim, 128, kernel_size=(1, out_dimensions), stride=1, padding=0
             ),
-            nn.BatchNorm2d(1028),
-            nn.ReLU(True),
-            # # # Transposed Convolution 2
-            nn.ConvTranspose2d(1028, 256, kernel_size=(1, 1), stride=1, padding=0),
-            nn.BatchNorm2d(256),
-            nn.ReLU(True),
-            # # Transposed Convolution 3
-            nn.ConvTranspose2d(256, 128, kernel_size=(1, 1), stride=1, padding=0),
             nn.BatchNorm2d(128),
             nn.ReLU(True),
+            # # # Transposed Convolution 2
+            nn.ConvTranspose2d(128, 64, kernel_size=(1, 1), stride=1, padding=0),
+            nn.BatchNorm2d(64),
+            nn.ReLU(True),
+            # # Transposed Convolution 3
+            nn.ConvTranspose2d(64, 32, kernel_size=(1, 1), stride=1, padding=0),
+            nn.BatchNorm2d(32),
+            nn.ReLU(True),
             # # Transposed Convolution 4 to get to 3 channels, 2000 samples and 1 feature
-            nn.ConvTranspose2d(128, 1, kernel_size=(1, 1), stride=1, padding=0),
+            nn.ConvTranspose2d(32, 1, kernel_size=(1, 1), stride=1, padding=0),
             nn.Sigmoid(),
             nn.Flatten(1, 2),
         )
 
         for layer in self.model:  # TODO: check on this later
             if hasattr(layer, "weight"):
-                nn.init.uniform_(layer.weight, a=-0.3, b=0.3)
+                nn.init.uniform_(layer.weight, a=-0.5, b=0.5)
 
             if hasattr(layer, "bias"):
                 nn.init.uniform_(layer.bias, a=-0.15, b=0.15)

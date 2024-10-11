@@ -119,7 +119,7 @@ class GAN(nn.Module):
 
             # Create dataloader
             dataloader = DataLoader(
-                self.trainset, batch_size=batch_size, shuffle=True, drop_last=True
+                self.trainset, batch_size=batch_size, shuffle=True, drop_last=False
             )
 
             # Log run parameters
@@ -189,7 +189,7 @@ class GAN(nn.Module):
 
         if dataloader is None:
             dataloader = DataLoader(
-                self.trainset, batch_size=batch_size, shuffle=True, drop_last=True
+                self.trainset, batch_size=batch_size, shuffle=True, drop_last=False
             )
 
         self.generator.train()
@@ -203,13 +203,6 @@ class GAN(nn.Module):
         for i, (descriptors, real_images) in enumerate(dataloader):
             real_images = real_images.to(self.device)
             descriptors = descriptors.to(self.device)
-
-            real_labels = (
-                torch.ones(real_images.size(0), 1).to(self.device) - 0.1
-            )  # NOTE: A hack from 'Synthesising realistic 2D microstructures of unidirectional fibre-reinforced composites with a generative adversarial network'
-            fake_labels = (
-                torch.zeros(real_images.size(0), 1).to(self.device) + 0.1
-            )  # NOTE: The hack could be used in reverse
 
             # Train the discriminator
             self.generator.eval()
@@ -234,6 +227,9 @@ class GAN(nn.Module):
                 )
             else:
                 # Wasserstein GAN
+                real_labels = torch.ones_like(real_outputs)
+                fake_labels = torch.zeros_like(fake_outputs)
+
                 d_loss = self.d_criterion(real_outputs, real_labels) + self.d_criterion(
                     fake_outputs, fake_labels
                 )
@@ -265,16 +261,31 @@ class GAN(nn.Module):
             fake_outputs = self.discriminator(fake_images)
 
             g_loss = self.g_criterion(
-                real_images, fake_images, fake_outputs, real_labels
+                real_images, fake_images, fake_outputs
             )  # We want the generator to generate images that the discriminator thinks are real
             g_loss.backward()
 
             g_grad_norm = torch.nn.utils.clip_grad_norm_(
-                self.generator.parameters(), 50, error_if_nonfinite=True
-            )  # Clip gradients
+                self.generator.parameters(), 10_000, error_if_nonfinite=True
+            )  # Clip gradients, TODO: move to config
             self.g_optimizer.step()
 
             mean_loss_g += g_loss.item()
+
+            # output example s
+            # discriminator_output = self.discriminator(fake_images)
+            # discriminator_output_real = self.discriminator(real_images)
+
+            # # Transfer to csv
+            # import pandas as pd
+
+            # print(real_images.shape)
+            # pd.Series(
+            #     discriminator_output_real.to("cpu").detach().numpy().flatten()
+            # ).to_csv("discriminator_output_real.csv")
+            # pd.Series(discriminator_output.to("cpu").detach().numpy().flatten()).to_csv(
+            #     "discriminator_output.csv"
+            # )
 
         # Log the optimizer hyperparameters
         if hasattr(self.d_optimizer, "param_groups"):
@@ -292,7 +303,9 @@ class GAN(nn.Module):
                 self.generator,
                 self.discriminator,
                 self.testset,  # NOTE: Should we visualize train set too?
-                n=int(epoch % 4),  # NOTE: This is a hack
+                n=torch.randint(
+                    0, len(self.testset) - 1, (1,)
+                ).item(),  # Plot a random sample
                 plot_radius=self.plot_radius,
                 return_fig=True,
             )

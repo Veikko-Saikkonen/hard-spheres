@@ -69,6 +69,39 @@ class HSDataset(TensorDataset):
                 samples += shuffled_samples
                 descriptors += new_descriptors
 
+            if synthetic_samples["spatial_offset_static"]:
+                # Create synthetic samples by adding noise to the original samples
+                new_descriptors = []
+                new_samples = []
+
+                # Add noise to the samples
+                # Amount of noise is in the synthetic_samples["spatial_offset_static"]
+
+                noise = synthetic_samples["spatial_offset_static"]
+
+                # Move the whole sample in a random direction
+                for sample in samples:
+                    new_sample = sample.clone()
+                    direction = torch.randint(
+                        0, 4, (1,)
+                    )  # 0: Up, 1: Down, 2: Left, 3: Right
+
+                    # Move the sample in the direction of the noise
+                    # NOTE: This is a very naive way of adding noise
+                    if direction == 0:
+                        new_sample[:, :, 1] += noise
+                    elif direction == 1:
+                        new_sample[:, :, 1] -= noise
+                    elif direction == 2:
+                        new_sample[:, :, 0] -= noise
+                    elif direction == 3:
+                        new_sample[:, :, 0] += noise
+
+                    new_samples.append(new_sample)
+
+                samples += new_samples
+                descriptors += descriptors
+
         if downsample:
             new_samples = []
             for sample in samples:
@@ -94,34 +127,3 @@ class HSDataset(TensorDataset):
         self.x = self.x.to(device)
         self.y = self.y.to(device)
         return self
-
-
-class HSDatasetLighting(L.LightningDataModule):
-    def __init__(
-        self,
-        dataframe,
-        device="cpu",
-        descriptor_list=["phi"],
-        synthetic_samples=False,
-        batch_size=32,
-    ):
-        super().__init__()
-        self.dataframe = dataframe
-        self.device = device
-        self.descriptor_list = descriptor_list
-        self.synthetic_samples = synthetic_samples
-        self.batch_size = batch_size
-
-    def setup(self, stage=None):
-        if stage == "fit" or stage is None:
-            self.train = HSDataset(
-                self.dataframe,
-                device=self.device,
-                descriptor_list=self.descriptor_list,
-                synthetic_samples=self.synthetic_samples,
-            )
-
-    def train_dataloader(self):
-        return torch.utils.data.DataLoader(
-            self.train, batch_size=self.batch_size, shuffle=True
-        )

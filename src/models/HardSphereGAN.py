@@ -217,7 +217,10 @@ class GAN(nn.Module):
             # NOTE: Should the fake images be detached to avoid backpropagating through the generator? We dont want to update the generator weights here
             fake_outputs = self.discriminator(fake_images)
 
-            if isinstance(self.d_criterion, CryinGANDiscriminatorLoss):
+            if (
+                self.run_params["training"]["d_loss"]["name"]
+                == "CryinGANDiscriminatorLoss"
+            ):
                 d_loss = self.d_criterion(
                     real_outputs,
                     fake_outputs,
@@ -355,6 +358,9 @@ class GAN(nn.Module):
         )
         g_loss_distance = self.g_criterion.prev_distance_loss.item()
 
+        d_penalty_gradient = self.d_criterion.prev_gradient_penalty.item()
+        d_loss_gan = self.d_criterion.prev_gan_loss.item()
+
         mlflow.log_metric("D_loss", mean_loss_d, step=epoch)
         mlflow.log_metric("G_loss", mean_loss_g, step=epoch)
         mlflow.log_metric("G_Density_loss", g_loss_density, step=epoch)
@@ -362,6 +368,9 @@ class GAN(nn.Module):
         mlflow.log_metric("G_GAN_loss", g_loss_gan, step=epoch)
         mlflow.log_metric("G_Feasibility_loss", g_physical_feasibility_loss, step=epoch)
         mlflow.log_metric("G_Distance_loss", g_loss_distance, step=epoch)
+
+        mlflow.log_metric("D_Gradient_penalty", d_penalty_gradient, step=epoch)
+        mlflow.log_metric("D_GAN_loss", d_loss_gan, step=epoch)
 
         # Log gradients with mlflow
 

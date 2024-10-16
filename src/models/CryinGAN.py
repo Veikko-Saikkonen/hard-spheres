@@ -105,7 +105,9 @@ class Generator(nn.Module):
 
     def generate_noise(self, batch_size):
         return rand(
-            (batch_size, self.rand_features), device=self.model[0].weight.device
+            (batch_size, self.rand_features),
+            device=self.model[0].weight.device,
+            requires_grad=False,
         )
 
     def _softmax_radius_dimensions(self, x: torch.FloatTensor):
@@ -268,6 +270,7 @@ class CCCGenerator(nn.Module):
         out_dimensions=3,
         out_samples=2000,
         latent_dim=6,
+        channels_coefficient=1,
         clip_output: tuple = False,
         fix_r=False,
     ):
@@ -280,14 +283,47 @@ class CCCGenerator(nn.Module):
 
         self.clip_output = clip_output
         self.rand_features = rand_features
-        # latent_features = 256 * 40  # From the paper, samples x latent_dim
-        latent_features = out_samples * latent_dim  # Samples x latent_dim
+        self.channels_coefficient = channels_coefficient
+        self.out_dimensions = out_dimensions
+        self.out_samples = out_samples
+        self.latent_dim = latent_dim
+        self.latent_features = out_samples * latent_dim  # Samples x latent_dim
 
         self.fix_r = fix_r
 
-        self.model = nn.Sequential(
+        self.model = self._create_model(
+            rand_features,
+            latent_dim,
+            out_samples,
+            out_dimensions,
+            channels_coefficient,
+            self.latent_features,
+        )
+
+        for layer in self.model:  # TODO: check on this later
+            if hasattr(layer, "weight"):
+                nn.init.uniform_(layer.weight, a=-0.3, b=0.3)
+
+            if hasattr(layer, "bias"):
+                nn.init.uniform_(layer.bias, a=-0.0, b=0.3)
+
+    @staticmethod
+    def _create_model(
+        rand_features,
+        latent_dim,
+        out_samples,
+        out_dimensions,
+        channels_coefficient,
+        latent_features,
+    ):
+
+        model = nn.Sequential(
             ## First fully connected layer
             # nn.Linear(in_features, 128 * 264), # 33k
+            # nn.Linear(
+            #     in_features=rand_features, out_features=rand_features
+            # ),  # 12k, half size
+            # nn.ReLU(True),
             nn.Linear(
                 in_features=rand_features, out_features=latent_features
             ),  # 12k, half size
@@ -297,30 +333,46 @@ class CCCGenerator(nn.Module):
             nn.Unflatten(1, (latent_dim, out_samples, 1)),
             # # Transposed Convolution 1
             nn.ConvTranspose2d(
-                latent_dim, 128, kernel_size=(1, out_dimensions), stride=1, padding=0
+                latent_dim,
+                128 * (2 ** (channels_coefficient - 1)),
+                kernel_size=(1, out_dimensions),
+                stride=1,
+                padding=0,
             ),
-            nn.BatchNorm2d(128),
+            nn.BatchNorm2d(128 * (2 ** (channels_coefficient - 1))),
             nn.ReLU(True),
             # # # Transposed Convolution 2
-            nn.ConvTranspose2d(128, 64, kernel_size=(1, 1), stride=1, padding=0),
-            nn.BatchNorm2d(64),
+            nn.ConvTranspose2d(
+                128 * (2 ** (channels_coefficient - 1)),
+                64 * (2 ** (channels_coefficient - 1)),
+                kernel_size=(1, 1),
+                stride=1,
+                padding=0,
+            ),
+            nn.BatchNorm2d(64 * (2 ** (channels_coefficient - 1))),
             nn.ReLU(True),
             # # Transposed Convolution 3
-            nn.ConvTranspose2d(64, 32, kernel_size=(1, 1), stride=1, padding=0),
-            nn.BatchNorm2d(32),
+            nn.ConvTranspose2d(
+                64 * (2 ** (channels_coefficient - 1)),
+                32 * (2 ** (channels_coefficient - 1)),
+                kernel_size=(1, 1),
+                stride=1,
+                padding=0,
+            ),
+            nn.BatchNorm2d(32 * (2 ** (channels_coefficient - 1))),
             nn.ReLU(True),
             # # Transposed Convolution 4 to get to 3 channels, 2000 samples and 1 feature
-            nn.ConvTranspose2d(32, 1, kernel_size=(1, 1), stride=1, padding=0),
-            nn.Sigmoid(),
+            nn.ConvTranspose2d(
+                32 * (2 ** (channels_coefficient - 1)),
+                1,
+                kernel_size=(1, 1),
+                stride=1,
+                padding=0,
+            ),
+            # nn.Sigmoid(), # not in the papers
             nn.Flatten(1, 2),
         )
-
-        for layer in self.model:  # TODO: check on this later
-            if hasattr(layer, "weight"):
-                nn.init.uniform_(layer.weight, a=-0.5, b=0.5)
-
-            if hasattr(layer, "bias"):
-                nn.init.uniform_(layer.bias, a=-0.15, b=0.15)
+        return model
 
     def _get_clip_parameters(self):
         clip_output_min = torch.as_tensor(
@@ -333,7 +385,9 @@ class CCCGenerator(nn.Module):
 
     def generate_noise(self, batch_size):
         return rand(
-            (batch_size, self.rand_features), device=self.model[0].weight.device
+            (batch_size, self.rand_features),
+            device=self.model[0].weight.device,
+            requires_grad=False,
         )
 
     def forward(self, x):
@@ -357,3 +411,70 @@ class CCCGenerator(nn.Module):
             out = torch.clamp(out, clip_output_min, clip_output_max)
 
         return out
+
+
+class CCCGeneratorWithDiffusion(CCCGenerator):
+    """
+    Generator for the CCC model with diffusion. The model is the same as the CCCGenerator, but with an additional diffusion layer.
+    NOTE: Not really diffusion, but a vaguely similar idea.
+    """
+
+    @staticmethod
+    def _create_model(
+        rand_features,  # For compatibility with parent class
+        latent_dim,  # For compatibility with parent class
+        out_samples,  # For compatibility with parent class
+        out_dimensions,  # For compatibility with parent class
+        channels_coefficient,
+        latent_features,  # For compatibility with parent class
+    ):
+        model = nn.Sequential(  #
+            # Transposed Convolution 1
+            nn.ConvTranspose2d(
+                1,
+                128 * (2 ** (channels_coefficient - 1)),
+                kernel_size=(1, 1),
+                stride=1,
+                padding=0,
+            ),
+            nn.BatchNorm2d(128 * (2 ** (channels_coefficient - 1))),
+            nn.ReLU(True),
+            # # # Transposed Convolution 2
+            nn.ConvTranspose2d(
+                128 * (2 ** (channels_coefficient - 1)),
+                64 * (2 ** (channels_coefficient - 1)),
+                kernel_size=(1, 1),
+                stride=1,
+                padding=0,
+            ),
+            nn.BatchNorm2d(64 * (2 ** (channels_coefficient - 1))),
+            nn.ReLU(True),
+            # # Transposed Convolution 3
+            nn.ConvTranspose2d(
+                64 * (2 ** (channels_coefficient - 1)),
+                32 * (2 ** (channels_coefficient - 1)),
+                kernel_size=(1, 1),
+                stride=1,
+                padding=0,
+            ),
+            nn.BatchNorm2d(32 * (2 ** (channels_coefficient - 1))),
+            nn.ReLU(True),
+            # # Transposed Convolution 4 to get to 3 channels, 2000 samples and 1 feature
+            nn.ConvTranspose2d(
+                32 * (2 ** (channels_coefficient - 1)),
+                1,
+                kernel_size=(1, 1),
+                stride=1,
+                padding=0,
+            ),
+            # nn.Sigmoid(), # not in the papers
+            nn.Flatten(1, 2),
+        )
+        return model
+
+    def generate_noise(self, batch_size):
+        return rand(
+            (batch_size, 1, self.out_samples, self.out_dimensions),
+            device=self.model[0].weight.device,
+            requires_grad=False,
+        )

@@ -12,8 +12,7 @@ from src.utils import build_optimizer_fn_from_config, build_run_name
 from src.utils import log_nested_dict
 from src.models.losses import build_loss_fn
 from src.models.losses import CryinGANDiscriminatorLoss
-from src.models.CustomModels import HSDiscriminator
-from src.models.CustomModels import HSGenerator
+from src.models import CryinGAN
 
 
 class GAN(nn.Module):
@@ -30,7 +29,20 @@ class GAN(nn.Module):
         batch_size = run_params["training"]["batch_size"]
 
         if generator_model is None:
-            generator = HSGenerator(**run_params["generator"])
+            # This means the user has not provided a generator model, but has provided parameters for the generator
+            generator_params = run_params["generator"]
+
+            # 'name' tells the class of the generator, which may be HSGenerator or another class
+            _class = getattr(
+                __import__(
+                    "src.models.CryinGAN",
+                    fromlist=[run_params["generator"]["name"]],
+                ),
+                run_params["generator"]["name"],
+            )
+
+            generator_params.pop("name")  # Remove the name parameter
+            generator = _class(**generator_params)
         else:
             generator = generator_model
             run_params["generator"] = {}
@@ -68,7 +80,13 @@ class GAN(nn.Module):
         # Register dataset with mlflow
 
     def train_n_epochs(
-        self, epochs, batch_size=None, experiment_name=None, run_name=None, comment=None
+        self,
+        epochs,
+        batch_size=None,
+        experiment_name=None,
+        run_name=None,
+        comment=None,
+        save_model=True,
     ):
         mlflow.set_tracking_uri(uri="http://127.0.0.1:8080")  # NOTE: Seems slow
 
@@ -138,9 +156,14 @@ class GAN(nn.Module):
                 # Early stopping parameters
                 mean_loss_d_prev = torch.inf
                 mean_loss_g_prev = torch.inf
+                g_grad_norm_prev = torch.inf
+                d_grad_norm_prev = torch.inf
 
                 patience = self.run_params["training"]["early_stopping_patience"]
                 headstart = self.run_params["training"]["early_stopping_headstart"]
+                early_stopping_tolerance = self.run_params["training"][
+                    "early_stopping_tolerance"
+                ]
                 # Log the naive scenario of no training
                 fig = plot_sample_figures(
                     self.generator,
@@ -156,16 +179,17 @@ class GAN(nn.Module):
                 plt.close(fig)
 
                 for epoch in tqdm(range(epochs)):
-                    mean_loss_d, mean_loss_g = self._train_epoch(
-                        epoch, batch_size=batch_size, dataloader=dataloader
+                    mean_loss_d, mean_loss_g, g_grad_norm, d_grad_norm = (
+                        self._train_epoch(
+                            epoch, batch_size=batch_size, dataloader=dataloader
+                        )
                     )
 
                     # Early stopping if loss not decreasing
-                    tolerance = 0.0001  # TODO: Move to config
                     if (
-                        mean_loss_d > (mean_loss_d_prev - tolerance)
-                        and mean_loss_g > (mean_loss_g_prev - tolerance)
-                        and epoch > headstart  # NOTE: We don't want to stop too early
+                        # Look at gradients
+                        abs(g_grad_norm - g_grad_norm_prev)  # Change of gradient norm
+                        < early_stopping_tolerance
                     ):
                         patience -= 1
                         if patience == 0:
@@ -174,6 +198,8 @@ class GAN(nn.Module):
                     else:
                         mean_loss_d_prev = mean_loss_d
                         mean_loss_g_prev = mean_loss_g
+                        g_grad_norm_prev = g_grad_norm
+                        d_grad_norm_prev = d_grad_norm
                         # model improving, reset patience
                         patience = self.run_params["training"][
                             "early_stopping_patience"
@@ -182,7 +208,31 @@ class GAN(nn.Module):
             except KeyboardInterrupt:  # For jupyter notebook
                 print("Interrupted")
 
-    def _train_epoch(self, epoch, batch_size=None, dataloader=None, save_model=True):
+            if save_model:
+                # Save the trained model to MLflow.
+                generator_signature = mlflow.models.ModelSignature(
+                    inputs=self.generator.mlflow_input_schema,
+                    outputs=self.generator.mlflow_output_schema,
+                )
+
+                discriminator_signature = mlflow.models.ModelSignature(
+                    inputs=self.discriminator.mlflow_input_schema,
+                    outputs=self.discriminator.mlflow_output_schema,
+                )
+
+                print("Logging models to mlflow")
+                mlflow.pytorch.log_model(
+                    self.generator,
+                    "generator",
+                    signature=generator_signature,
+                )
+                mlflow.pytorch.log_model(
+                    self.discriminator,
+                    "discriminator",
+                    signature=discriminator_signature,
+                )
+
+    def _train_epoch(self, epoch, batch_size=None, dataloader=None):
 
         if batch_size is None:
             batch_size = self.run_params["training"]["batch_size"]
@@ -230,8 +280,8 @@ class GAN(nn.Module):
                 )
             else:
                 # Wasserstein GAN
-                real_labels = torch.ones_like(real_outputs)
-                fake_labels = torch.zeros_like(fake_outputs)
+                real_labels = torch.ones_like(real_outputs) - 0.1
+                fake_labels = torch.zeros_like(fake_outputs) + 0.1
 
                 d_loss = self.d_criterion(real_outputs, real_labels) + self.d_criterion(
                     fake_outputs, fake_labels
@@ -240,7 +290,7 @@ class GAN(nn.Module):
             d_loss.backward()
 
             d_grad_norm = torch.nn.utils.clip_grad_norm_(
-                self.discriminator.parameters(), 50, error_if_nonfinite=True
+                self.discriminator.parameters(), 10_000, error_if_nonfinite=True
             )  # Clip gradients
 
             # Give the generator a headstart
@@ -331,17 +381,6 @@ class GAN(nn.Module):
             mlflow.log_figure(fig, f"generator_distributions_epoch_{epoch_str}.png")
             plt.close(fig)
 
-        if save_model:
-            pass  # TODO: Implement
-            # Log the model
-            # sklearn.log_model(
-            #     sk_model=lr,
-            #     artifact_path="iris_model",
-            #     signature=signature,
-            #     input_example=X_train,
-            #     registered_model_name="tracking-quickstart",
-            # )
-
         # print(
         #     f'Time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, Epoch {epoch}, D loss: {d_loss.item()}, G_GAN loss: {g_loss_gan.item()}, G_P loss: {g_loss_physical.item()}'
         # )
@@ -358,8 +397,12 @@ class GAN(nn.Module):
         )
         g_loss_distance = self.g_criterion.prev_distance_loss.item()
 
-        d_penalty_gradient = self.d_criterion.prev_gradient_penalty.item()
-        d_loss_gan = self.d_criterion.prev_gan_loss.item()
+        if "prev_gradient_penalty" in self.d_criterion.__dict__:
+            d_penalty_gradient = self.d_criterion.prev_gradient_penalty.item()
+            d_loss_gan = self.d_criterion.prev_gan_loss.item()
+        else:
+            d_penalty_gradient = 0
+            d_loss_gan = 0
 
         mlflow.log_metric("D_loss", mean_loss_d, step=epoch)
         mlflow.log_metric("G_loss", mean_loss_g, step=epoch)
@@ -384,7 +427,7 @@ class GAN(nn.Module):
         # mlflow.log_metric("CPU", psutil.cpu_percent(), step=epoch)
         # mlflow.log_metric("RAM", psutil.virtual_memory().percent, step=epoch)
 
-        return mean_loss_d, mean_loss_g
+        return mean_loss_d, mean_loss_g, g_grad_norm, d_grad_norm
 
     def generate(self, input):
         self.generator.eval()

@@ -2,6 +2,9 @@ from torch import nn
 from torch import rand, randn
 import torch
 
+import numpy as np
+from mlflow.types import Schema, TensorSpec
+
 
 class Generator(nn.Module):
     def __init__(
@@ -204,6 +207,19 @@ class CCCGDiscriminator(nn.Module):
         super().__init__()
 
         # TODO: Make parameters configurable, need bigger model
+        self.input_shape = (in_samples, input_channels)
+        self.output_shape = (1,)
+
+        self.mlflow_output_schema = Schema(
+            [
+                TensorSpec(shape=(-1, *self.output_shape), type=np.dtype(np.float32)),
+            ]
+        )
+        self.mlflow_input_schema = Schema(
+            [
+                TensorSpec(shape=(-1, *self.input_shape), type=np.dtype(np.float32)),
+            ]
+        )
 
         self.main = nn.Sequential(
             # Convolutional layer 2
@@ -214,7 +230,7 @@ class CCCGDiscriminator(nn.Module):
                 stride=1,
                 padding=0,
             ),
-            nn.LeakyReLU(0.2, inplace=True),
+            nn.LeakyReLU(0.2, inplace=False),
             # # # Convolutional layer 2
             nn.Conv2d(
                 int(64 * (2 ** (channels_coefficient - 1))),
@@ -223,7 +239,7 @@ class CCCGDiscriminator(nn.Module):
                 stride=1,
                 padding=0,
             ),
-            nn.LeakyReLU(0.2, inplace=True),
+            nn.LeakyReLU(0.2, inplace=False),
             # Convolutional layer 3
             nn.Conv2d(
                 int(128 * (2 ** (channels_coefficient - 1))),
@@ -232,7 +248,7 @@ class CCCGDiscriminator(nn.Module):
                 stride=1,
                 padding=0,
             ),
-            nn.LeakyReLU(0.2, inplace=True),
+            nn.LeakyReLU(0.2, inplace=False),
             nn.AdaptiveAvgPool2d(1),
             # nn.AdaptiveMaxPool2d(1),
             nn.Flatten(1, -1),
@@ -242,12 +258,41 @@ class CCCGDiscriminator(nn.Module):
             # Fully connected layers
             # NOTE: Adjusted the width of the layers to the nearest power of 2 in comparison to the original paper
             nn.Linear(256 * (2 ** (channels_coefficient - 1)), 1024),
-            nn.LeakyReLU(0.2, inplace=True),
+            nn.LeakyReLU(0.2, inplace=False),
             nn.Linear(1024, 256),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(256, 1),
+            nn.LeakyReLU(0.2, inplace=False),
+            nn.Linear(256, 10),
             nn.Sigmoid(),
+            nn.AdaptiveAvgPool1d(1),  # Average pooling, as in the CryinGAN paper
+            # The other paper used fully connected layers all the way
         )
+
+        for layer in self.main:  # TODO: check on this later
+            if isinstance(layer, nn.Linear):
+                torch.nn.init.xavier_uniform_(
+                    layer.weight, gain=nn.init.calculate_gain("leaky_relu")
+                )
+                layer.bias.data.fill_(0.01)
+
+            if isinstance(layer, nn.ConvTranspose2d):
+                torch.nn.init.xavier_uniform_(
+                    layer.weight, gain=nn.init.calculate_gain("leaky_relu")
+                )
+                layer.bias.data.fill_(0.01)
+
+        for layer in self.fc_layers:
+            # NOTE: Nice WETWET here, TODO: Fix this
+            if isinstance(layer, nn.Linear):
+                torch.nn.init.xavier_uniform_(
+                    layer.weight, gain=nn.init.calculate_gain("leaky_relu")
+                )
+                layer.bias.data.fill_(0.01)
+
+            if isinstance(layer, nn.ConvTranspose2d):
+                torch.nn.init.xavier_uniform_(
+                    layer.weight, gain=nn.init.calculate_gain("leaky_relu")
+                )
+                layer.bias.data.fill_(0.01)
 
     def forward(self, input):
         # First convolve each atom individually
@@ -288,6 +333,19 @@ class CCCGenerator(nn.Module):
         self.out_samples = out_samples
         self.latent_dim = latent_dim
         self.latent_features = out_samples * latent_dim  # Samples x latent_dim
+        self.input_shape = (out_samples, latent_dim)
+        self.output_shape = (out_samples, out_dimensions)
+
+        self.mlflow_output_schema = Schema(
+            [
+                TensorSpec(shape=(-1, *self.output_shape), type=np.dtype(np.float32)),
+            ]
+        )
+        self.mlflow_input_schema = Schema(
+            [
+                TensorSpec(shape=(-1, *self.input_shape), type=np.dtype(np.float32)),
+            ]
+        )
 
         self.fix_r = fix_r
 
@@ -301,11 +359,17 @@ class CCCGenerator(nn.Module):
         )
 
         for layer in self.model:  # TODO: check on this later
-            if hasattr(layer, "weight"):
-                nn.init.uniform_(layer.weight, a=-0.3, b=0.3)
+            if isinstance(layer, nn.Linear):
+                torch.nn.init.xavier_uniform_(
+                    layer.weight, gain=nn.init.calculate_gain("relu")
+                )
+                layer.bias.data.fill_(0.01)
 
-            if hasattr(layer, "bias"):
-                nn.init.uniform_(layer.bias, a=-0.0, b=0.3)
+            if isinstance(layer, nn.ConvTranspose2d):
+                torch.nn.init.xavier_uniform_(
+                    layer.weight, gain=nn.init.calculate_gain("relu")
+                )
+                layer.bias.data.fill_(0.01)
 
     @staticmethod
     def _create_model(
@@ -327,7 +391,7 @@ class CCCGenerator(nn.Module):
             nn.Linear(
                 in_features=rand_features, out_features=latent_features
             ),  # 12k, half size
-            nn.ReLU(True),
+            nn.ReLU(),
             # # Reshape to (128, 264, 1, 1)
             # nn.Unflatten(1, (128, 264, 1)),
             nn.Unflatten(1, (latent_dim, out_samples, 1)),
@@ -340,7 +404,7 @@ class CCCGenerator(nn.Module):
                 padding=0,
             ),
             nn.BatchNorm2d(128 * (2 ** (channels_coefficient - 1))),
-            nn.ReLU(True),
+            nn.ReLU(),
             # # # Transposed Convolution 2
             nn.ConvTranspose2d(
                 128 * (2 ** (channels_coefficient - 1)),
@@ -350,7 +414,7 @@ class CCCGenerator(nn.Module):
                 padding=0,
             ),
             nn.BatchNorm2d(64 * (2 ** (channels_coefficient - 1))),
-            nn.ReLU(True),
+            nn.ReLU(),
             # # Transposed Convolution 3
             nn.ConvTranspose2d(
                 64 * (2 ** (channels_coefficient - 1)),
@@ -360,7 +424,7 @@ class CCCGenerator(nn.Module):
                 padding=0,
             ),
             nn.BatchNorm2d(32 * (2 ** (channels_coefficient - 1))),
-            nn.ReLU(True),
+            nn.ReLU(),
             # # Transposed Convolution 4 to get to 3 channels, 2000 samples and 1 feature
             nn.ConvTranspose2d(
                 32 * (2 ** (channels_coefficient - 1)),
@@ -459,7 +523,7 @@ class CCCGeneratorWithDiffusion(CCCGenerator):
             ),
             nn.BatchNorm2d(32 * (2 ** (channels_coefficient - 1))),
             nn.ReLU(True),
-            # # Transposed Convolution 4 to get to 3 channels, 2000 samples and 1 feature
+            # # Final transposed convolution to get to 3 channels, 2000 samples and 1 feature
             nn.ConvTranspose2d(
                 32 * (2 ** (channels_coefficient - 1)),
                 1,

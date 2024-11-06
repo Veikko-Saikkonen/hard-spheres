@@ -49,25 +49,11 @@ class HSDataset(TensorDataset):
                 rotated_samples = []
                 for sample in samples:
                     new_sample = sample.clone()
-                    new_sample[:, 0] = sample[:, 1]
-                    new_sample[:, 1] = sample[:, 0]
+                    new_sample[:, :, 0] = sample[:, :, 1]
+                    new_sample[:, :, 1] = sample[:, :, 0]
                     rotated_samples.append(new_sample)
                 samples += rotated_samples
                 descriptors += descriptors
-
-            if synthetic_samples["shuffling"]:
-                # Create synthetic samples by shuffling the original samples
-                shuffled_samples = []
-                new_descriptors = []
-                for i in range(
-                    synthetic_samples["shuffling"]
-                ):  # Add one permutation for each shuffle
-                    for sample in samples:
-                        shuffled_samples.append(sample[torch.randperm(sample.size(0))])
-                    new_descriptors += descriptors
-
-                samples += shuffled_samples
-                descriptors += new_descriptors
 
             if synthetic_samples["spatial_offset_static"]:
                 # Create synthetic samples by adding noise to the original samples
@@ -102,11 +88,31 @@ class HSDataset(TensorDataset):
                 samples += new_samples
                 descriptors += descriptors
 
+            if synthetic_samples["shuffling"]:  # Shuffle in the end
+                # Create synthetic samples by shuffling the original samples
+                shuffled_samples = []
+                new_descriptors = []
+                for i in range(
+                    synthetic_samples["shuffling"]
+                ):  # Add one permutation for each shuffle
+                    for sample in samples:
+                        shuffled_samples.append(sample[torch.randperm(sample.size(0))])
+                    new_descriptors += descriptors
+
+                samples += shuffled_samples
+                descriptors += new_descriptors
+
         if downsample:
             new_samples = []
             for sample in samples:
                 downsample_integer = int(sample.shape[1] * downsample)
-                pick_index = torch.randperm(sample.shape[1])[:downsample_integer]
+                # Random pick
+                # pick_index = torch.randperm(sample.shape[1])[:downsample_integer]
+                # Pick the ones closest to the center
+                center = torch.tensor([0.0, 0.0], device=device)
+                distance = torch.norm(sample[:, :, :2] - center, dim=0)
+                _, pick_index = distance.topk(downsample_integer, largest=False, dim=0)
+                pick_index = slice(0, downsample_integer)
                 _sample = sample[:, pick_index]
                 new_samples.append(_sample)
             samples = new_samples

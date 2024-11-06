@@ -66,16 +66,23 @@ class HSGeneratorLoss(nn.Module):
 
         return loss
 
-    def _distance_loss(self, real_images, fake_images):
+    def _distance_loss(self, real_images, fake_images, k=3):
         # Loss based on the distribution of distances
         quantiles = torch.tensor(  # TODO: Make this a parameter
-            [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+            [0.05, 0.5, 0.95],
             dtype=torch.float32,
             device=fake_images.device,
         )
 
-        dist_real = torch.cdist(real_images[:, :, :2], real_images[:, :, :2])
-        dist_fake = torch.cdist(fake_images[:, :, :2], fake_images[:, :, :2])
+        dist_real = torch.cdist(
+            real_images[:, :, :2], real_images[:, :, :2], p=2
+        )  # TODO: Try p=infinity
+        dist_fake = torch.cdist(fake_images[:, :, :2], fake_images[:, :, :2], p=2)
+
+        # Take the k nearest neighbours
+        if isinstance(int(k), int) and k:
+            dist_real = torch.topk(dist_real, k=k, dim=2, largest=False).values
+            dist_fake = torch.topk(dist_fake, k=k, dim=2, largest=False).values
 
         # Take the lower triangle to avoid duplicates
         # mask = torch.tril(torch.ones_like(dist_real), diagonal=1)
@@ -138,6 +145,31 @@ class HSGeneratorLoss(nn.Module):
 
         return loss
 
+    def _nn_distance_loss(self, real_images, fake_images):
+        # Compute k-nearest neighbors distances for both real and fake images
+        k = 10  # Number of nearest neighbors
+        quantiles = torch.tensor(
+            [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+            dtype=torch.float32,
+            device=fake_images.device,
+        )
+
+        def compute_knn_distances(images):
+            nnd = NNDescent(
+                images[:, :2], metric="euclidean", n_neighbors=k, low_memory=False
+            )
+            distances, _ = nnd.query(images[:, :2], k=k)
+            return distances
+
+        real_distances = compute_knn_distances(real_images)
+        fake_distances = compute_knn_distances(fake_images)
+
+        real_yq = torch.quantile(real_distances, quantiles, dim=1)
+        fake_rq = torch.quantile(fake_distances, quantiles, dim=1)
+
+        loss = self.mse(fake_rq, real_yq)
+        return loss
+
     def _physical_feasibility_loss(self, fake_points):
 
         # Rescale the coordinates and radii back to their original scales
@@ -163,18 +195,20 @@ class HSGeneratorLoss(nn.Module):
             rescaled_points[:, :, 2].unsqueeze(1).abs()
             + rescaled_points[:, :, 2].unsqueeze(2).abs()
         )
-        epsilon = 1e-5
+        epsilon = 1e-4
         # Instead of a hard limit, use a differentiable loss function
-        overlap_distance = (
-            radii - (dist + epsilon)
-        ) / radii.mean()  # epsilon = tolerance for overlapping
+        overlap_distance = radii - (
+            dist + epsilon
+        )  # epsilon = tolerance for overlapping
         overlap_distance = nn.ReLU(inplace=False)(
             overlap_distance
         )  # Zero the negative values, the distances can be larger than radius
         # Square the result to emphasize larger overlaps
         # Take the root to make the loss differentiable
         overlap_distance = torch.sqrt(overlap_distance**2)  #
-        overlap_distance = overlap_distance.sum()
+        overlap_distance = overlap_distance.sum() / (
+            radii.sum() / 2
+        )  # How much of the total radius is overlapping
 
         return overlap_distance
 
@@ -210,6 +244,20 @@ class HSGeneratorLoss(nn.Module):
         return loss
 
     def forward(self, real_images, fake_images, fake_outputs):
+        """Calculate the loss for the generator.
+        NOTES:
+        - If loss coefficient is 0, the loss is not calculated, otherwise it is calculated and tracked
+        - If the loss is calculated, it is multiplied by the coefficient
+        - If the loss is set to False, it is not added to the total loss (even if the coefficient is not 0)
+
+        Args:
+            real_images (_type_): _description_
+            fake_images (_type_): _description_
+            fake_outputs (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
 
         loss = 0
 
@@ -220,13 +268,19 @@ class HSGeneratorLoss(nn.Module):
             )
             loss += self.prev_radius_loss
 
-        if self.physical_feasibility_loss:
+        if self.coefficients["physical_feasibility_loss"]:
             self.prev_physical_feasibility_loss = (
-                self._physical_feasibility_loss(
-                    fake_images,
+                nn.ReLU()(  # ReLU to avoid negative values in case of no overlap
+                    self._physical_feasibility_loss(
+                        fake_images,
+                    )
+                    - self._physical_feasibility_loss(
+                        real_images,
+                    )  # Compare to the real image to correct the scale
                 )
                 * self.coefficients["physical_feasibility_loss"]
             )
+        if self.physical_feasibility_loss:
             loss += self.prev_physical_feasibility_loss
 
         if self.gan_loss:
@@ -239,20 +293,22 @@ class HSGeneratorLoss(nn.Module):
 
             loss += self.prev_gan_loss
 
-        if self.grid_density_loss:
+        if self.coefficients["grid_density_loss"]:
             self.prev_grid_density_loss = (
                 self._grid_density_loss(
                     real_images=real_images, fake_images=fake_images
                 )
                 * self.coefficients["grid_density_loss"]
             )
+        if self.grid_density_loss:
             loss += self.prev_grid_density_loss
 
-        if self.distance_loss:
+        if self.coefficients["distance_loss"]:
             self.prev_distance_loss = (
                 self._distance_loss(real_images=real_images, fake_images=fake_images)
                 * self.coefficients["distance_loss"]
             )
+        if self.distance_loss:
             loss += self.prev_distance_loss
 
         return loss
@@ -284,7 +340,9 @@ class CryinGANDiscriminatorLoss(nn.Module):
             is_grads_batched=False,
         )[0]
 
-        gradient_penalty = self.mu * ((gradients.norm(2, dim=1) - 1) ** 2).mean()
+        gradient_penalty = (
+            self.mu * ((gradients.norm(2, dim=1) - 1) ** 2).mean()
+        )  # TODO: Check if this is correct
         return gradient_penalty
 
     def forward(

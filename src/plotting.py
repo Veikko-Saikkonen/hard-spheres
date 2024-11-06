@@ -71,13 +71,22 @@ def plot_sample_distributions(
     if plot_distances:
         import torch
 
-        dist_real = torch.cdist(sample_y[:, :, :2], sample_y[:, :, :2]).numpy()
+        dist_real = torch.cdist(sample_y[:, :, :2], sample_y[:, :, :2], p=2)
         dist_fake = torch.cdist(
-            sample_generated_y[:, :, :2], sample_generated_y[:, :, :2]
-        ).numpy()
+            sample_generated_y[:, :, :2], sample_generated_y[:, :, :2], p=2
+        )
 
-        ax[-1].hist(dist_real.flatten(), bins=20, alpha=0.5, label="Real Distances")
-        ax[-1].hist(dist_fake.flatten(), bins=20, alpha=0.5, label="Fake Distances")
+        k = 3  # Number of nearest neighbors to consider
+        dist_real = torch.topk(dist_real, k=k, dim=2, largest=False).values
+        dist_fake = torch.topk(dist_fake, k=k, dim=2, largest=False).values
+
+        dist_real = dist_real.numpy()
+        dist_fake = dist_fake.numpy()
+
+        ax[-1].hist(dist_real.flatten(), bins="auto", alpha=0.5, label="Real Distances")
+        # Get the bins and set for the fake distances
+
+        ax[-1].hist(dist_fake.flatten(), bins="auto", alpha=0.5, label="Fake Distances")
         ax[-1].set_title("Distances")
         ax[-1].legend()
 

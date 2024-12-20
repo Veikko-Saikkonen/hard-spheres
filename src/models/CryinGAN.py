@@ -134,7 +134,7 @@ class Generator(nn.Module):
 
         noise = self.generate_noise(x.size(0))
         out = self.model(noise)
-        if self.fix_r:
+        if self.fix_r is not None:
             if out.size(-1) < 3:
                 out = torch.cat(
                     [out, self.fix_r * torch.ones_like(out[..., 0:1])], dim=-1
@@ -262,7 +262,7 @@ class CCCGDiscriminator(nn.Module):
             nn.Linear(1024, 256),
             nn.LeakyReLU(0.2, inplace=False),
             nn.Linear(256, 10),
-            nn.Sigmoid(),
+            # nn.Sigmoid(),
             nn.AdaptiveAvgPool1d(1),  # Average pooling, as in the CryinGAN paper
             # The other paper used fully connected layers all the way
         )
@@ -338,7 +338,7 @@ class CCCGenerator(nn.Module):
 
         self.mlflow_output_schema = Schema(
             [
-                TensorSpec(shape=(-1, *self.output_shape), type=np.dtype(np.float32)),
+                TensorSpec(shape=(-1, -1), type=np.dtype(np.float32)),
             ]
         )
         self.mlflow_input_schema = Schema(
@@ -381,6 +381,8 @@ class CCCGenerator(nn.Module):
         latent_features,
     ):
 
+        channels_base = 32
+
         model = nn.Sequential(
             ## First fully connected layer
             # nn.Linear(in_features, 128 * 264), # 33k
@@ -398,7 +400,7 @@ class CCCGenerator(nn.Module):
             # # Transposed Convolution 1
             nn.ConvTranspose2d(
                 latent_dim,
-                128 * (2 ** (channels_coefficient - 1)),
+                (channels_base * 2**2) * (2 ** (channels_coefficient - 1)),
                 kernel_size=(1, out_dimensions),
                 stride=1,
                 padding=0,
@@ -407,27 +409,27 @@ class CCCGenerator(nn.Module):
             nn.ReLU(),
             # # # Transposed Convolution 2
             nn.ConvTranspose2d(
-                128 * (2 ** (channels_coefficient - 1)),
-                64 * (2 ** (channels_coefficient - 1)),
+                (channels_base * 2**2) * (2 ** (channels_coefficient - 1)),
+                (channels_base * 2**1) * (2 ** (channels_coefficient - 1)),
                 kernel_size=(1, 1),
                 stride=1,
                 padding=0,
             ),
-            nn.BatchNorm2d(64 * (2 ** (channels_coefficient - 1))),
+            nn.BatchNorm2d((channels_base * 2**1) * (2 ** (channels_coefficient - 1))),
             nn.ReLU(),
             # # Transposed Convolution 3
             nn.ConvTranspose2d(
-                64 * (2 ** (channels_coefficient - 1)),
-                32 * (2 ** (channels_coefficient - 1)),
+                (channels_base * 2**1) * (2 ** (channels_coefficient - 1)),
+                (channels_base * 2**0) * (2 ** (channels_coefficient - 1)),
                 kernel_size=(1, 1),
                 stride=1,
                 padding=0,
             ),
-            nn.BatchNorm2d(32 * (2 ** (channels_coefficient - 1))),
+            nn.BatchNorm2d((channels_base * 2**0) * (2 ** (channels_coefficient - 1))),
             nn.ReLU(),
             # # Transposed Convolution 4 to get to 3 channels, 2000 samples and 1 feature
             nn.ConvTranspose2d(
-                32 * (2 ** (channels_coefficient - 1)),
+                (channels_base * 2**0) * (2 ** (channels_coefficient - 1)),
                 1,
                 kernel_size=(1, 1),
                 stride=1,
@@ -461,13 +463,15 @@ class CCCGenerator(nn.Module):
 
         out = self.model(noise)
 
-        if self.fix_r:
+        if self.fix_r is not None:
             if out.size(-1) < 3:
                 out = torch.cat(
                     [out, self.fix_r * torch.ones_like(out[..., 0:1])], dim=-1
                 )
             else:
                 out[..., -1] = self.fix_r
+
+        # Do a softmax over the last dimensions to set radius
 
         if self.clip_output:
 
@@ -482,6 +486,10 @@ class CCCGeneratorWithDiffusion(CCCGenerator):
     Generator for the CCC model with diffusion. The model is the same as the CCCGenerator, but with an additional diffusion layer.
     NOTE: Not really diffusion, but a vaguely similar idea.
     """
+
+    def __init__(self, *args, real_sample=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.real_sample = real_sample[:, :2].unsqueeze(0).unsqueeze(0)
 
     @staticmethod
     def _create_model(
@@ -537,8 +545,12 @@ class CCCGeneratorWithDiffusion(CCCGenerator):
         return model
 
     def generate_noise(self, batch_size):
-        return rand(
-            (batch_size, 1, self.out_samples, self.out_dimensions),
-            device=self.model[0].weight.device,
-            requires_grad=False,
+        noise = (
+            randn(
+                (batch_size, 1, self.out_samples, self.out_dimensions),
+                device=self.model[0].weight.device,
+                requires_grad=False,
+            )
+            / 100 # Reduce the noise a bit
         )
+        return self.real_sample + noise  

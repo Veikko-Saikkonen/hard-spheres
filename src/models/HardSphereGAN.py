@@ -6,6 +6,7 @@ from datetime import datetime
 from tqdm import tqdm
 import mlflow
 from matplotlib import pyplot as plt
+from pathlib import Path
 
 from src.plotting import plot_pointcloud, plot_sample_figures, plot_sample_distributions
 from src.utils import build_optimizer_fn_from_config, build_run_name
@@ -87,7 +88,14 @@ class GAN(nn.Module):
         run_name=None,
         comment=None,
         save_model=True,
+        requirements_file: Path = None,
     ):
+
+        if requirements_file:
+            requirements_file = requirements_file.resolve()
+            requirements_file = str(requirements_file)
+            print(f"Using requirements file: {requirements_file}")
+
         mlflow.set_tracking_uri(uri="http://127.0.0.1:8080")  # NOTE: Seems slow
 
         if batch_size is None:
@@ -225,11 +233,13 @@ class GAN(nn.Module):
                     self.generator,
                     "generator",
                     signature=generator_signature,
+                    pip_requirements=requirements_file,
                 )
                 mlflow.pytorch.log_model(
                     self.discriminator,
                     "discriminator",
                     signature=discriminator_signature,
+                    pip_requirements=requirements_file,
                 )
 
     def _train_epoch(self, epoch, batch_size=None, dataloader=None):
@@ -289,9 +299,16 @@ class GAN(nn.Module):
 
             d_loss.backward()
 
+            d_grad_clip_limit = 10_000
             d_grad_norm = torch.nn.utils.clip_grad_norm_(
-                self.discriminator.parameters(), 10_000, error_if_nonfinite=True
+                self.discriminator.parameters(),
+                d_grad_clip_limit,
+                error_if_nonfinite=True,
             )  # Clip gradients
+            d_grad_norm = torch.min(
+                d_grad_norm,
+                torch.tensor([d_grad_clip_limit], device=d_grad_norm.device),
+            )  # Avoid reporting infinity
 
             # Give the generator a headstart
             if self.run_params["training"]["generator_headstart"] < epoch:
@@ -318,9 +335,14 @@ class GAN(nn.Module):
             )  # We want the generator to generate images that the discriminator thinks are real
             g_loss.backward()
 
+            g_grad_clip_limit = 10_000
             g_grad_norm = torch.nn.utils.clip_grad_norm_(
-                self.generator.parameters(), 10_000, error_if_nonfinite=True
+                self.generator.parameters(), g_grad_clip_limit, error_if_nonfinite=True
             )  # Clip gradients, TODO: move to config
+            g_grad_norm = torch.min(
+                g_grad_norm,
+                torch.tensor([g_grad_clip_limit], device=g_grad_norm.device),
+            )
             self.g_optimizer.step()
 
             mean_loss_g += g_loss.item()
@@ -406,11 +428,18 @@ class GAN(nn.Module):
 
         mlflow.log_metric("D_loss", mean_loss_d, step=epoch)
         mlflow.log_metric("G_loss", mean_loss_g, step=epoch)
-        mlflow.log_metric("G_Density_loss", g_loss_density, step=epoch)
-        mlflow.log_metric("G_Radius_loss", g_loss_radius, step=epoch)
-        mlflow.log_metric("G_GAN_loss", g_loss_gan, step=epoch)
-        mlflow.log_metric("G_Feasibility_loss", g_physical_feasibility_loss, step=epoch)
-        mlflow.log_metric("G_Distance_loss", g_loss_distance, step=epoch)
+        if g_loss_density > 0:
+            mlflow.log_metric("G_Density_loss", g_loss_density, step=epoch)
+        if g_loss_radius > 0:
+            mlflow.log_metric("G_Radius_loss", g_loss_radius, step=epoch)
+        if g_loss_gan > 0:
+            mlflow.log_metric("G_GAN_loss", g_loss_gan, step=epoch)
+        if g_physical_feasibility_loss > 0:
+            mlflow.log_metric(
+                "G_Feasibility_loss", g_physical_feasibility_loss, step=epoch
+            )
+        if g_loss_distance > 0:
+            mlflow.log_metric("G_Distance_loss", g_loss_distance, step=epoch)
 
         mlflow.log_metric("D_Gradient_penalty", d_penalty_gradient, step=epoch)
         mlflow.log_metric("D_GAN_loss", d_loss_gan, step=epoch)

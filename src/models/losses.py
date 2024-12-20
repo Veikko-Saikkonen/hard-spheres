@@ -55,7 +55,7 @@ class HSGeneratorLoss(nn.Module):
     def _radius_loss(self, real_images, fake_images):
         # Loss based on sum of radiuses
         quantiles = torch.tensor(  # TODO: Make this a parameter
-            [0.05, 0.25, 0.50, 0.75, 0.95],
+            [0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95],
             dtype=torch.float32,
             device=fake_images.device,
         )
@@ -223,8 +223,8 @@ class HSGeneratorLoss(nn.Module):
 
     def _grid_density_loss(self, real_images, fake_images):
         quantiles = torch.tensor(
-            [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
-            # [0.05, 0.25, 0.50, 0.75, 0.95],
+            # [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+            [0.05, 0.25, 0.50, 0.75, 0.95],  #
             dtype=torch.float32,
             device=fake_images.device,
         )
@@ -269,23 +269,30 @@ class HSGeneratorLoss(nn.Module):
             loss += self.prev_radius_loss
 
         if self.coefficients["physical_feasibility_loss"]:
-            self.prev_physical_feasibility_loss = (
-                nn.ReLU()(  # ReLU to avoid negative values in case of no overlap
-                    self._physical_feasibility_loss(
+            # self.prev_physical_feasibility_loss = (
+            #     nn.ReLU()(  # ReLU to avoid negative values in case of no overlap
+            #         self._physical_feasibility_loss(
+            #             fake_images,
+            #         )
+            #         - self._physical_feasibility_loss(
+            #             real_images,
+            #         )  # Compare to the real image to correct the scale
+            #     )
+            #     * self.coefficients["physical_feasibility_loss"]
+            # )
+            self.prev_physical_feasibility_loss = self._physical_feasibility_loss(
                         fake_images,
-                    )
-                    - self._physical_feasibility_loss(
-                        real_images,
-                    )  # Compare to the real image to correct the scale
-                )
-                * self.coefficients["physical_feasibility_loss"]
-            )
+                    ) * self.coefficients["physical_feasibility_loss"]
+            
         if self.physical_feasibility_loss:
             loss += self.prev_physical_feasibility_loss
 
         if self.gan_loss:
             real_labels = torch.ones_like(fake_outputs) - 0.1
-            self.prev_gan_loss = self._gan_loss(fake_outputs, real_labels)
+            self.prev_gan_loss = (
+                self._gan_loss(fake_outputs, real_labels)
+                * self.coefficients["gan_loss"]
+            )
             # self.prev_gan_loss = (
             #     self._non_saturating_gan_loss(fake_outputs)
             #     * self.coefficients["gan_loss"]

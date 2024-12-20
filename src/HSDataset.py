@@ -41,52 +41,70 @@ class HSDataset(TensorDataset):
             )  # We are creating a 3D tensor of 2D samples
             descriptors.append(sample_descriptors)
 
+        if downsample:
+            new_samples = []
+            for sample in samples:
+                downsample_integer = int(sample.shape[1] * downsample)
+                # Random pick
+                # pick_index = torch.randperm(sample.shape[1])[:downsample_integer]
+                # Pick the ones closest to the center
+                center = torch.tensor([0.5, 0.5], device=device)
+                distance = torch.norm(sample[:, :, :2] - center, dim=2, p=2).squeeze(
+                    dim=0
+                )  # TODO: Change this to L2 distance
+                _, pick_index = distance.topk(downsample_integer, largest=False, dim=0)
+                _sample = sample[:, pick_index]
+                new_samples.append(_sample)
+            samples = new_samples
+
         if synthetic_samples:
 
             if synthetic_samples["rotational"]:
 
-                # Create a new samples by rotating the original sample, ie switching x and y
-                rotated_samples = []
-                for sample in samples:
-                    new_sample = sample.clone()
-                    new_sample[:, :, 0] = sample[:, :, 1]
-                    new_sample[:, :, 1] = sample[:, :, 0]
-                    rotated_samples.append(new_sample)
-                samples += rotated_samples
-                descriptors += descriptors
+                for _ in range(synthetic_samples["rotational"]):
+                    # Repeat N times
+
+                    # Create a new samples by rotating the original sample, ie switching x and y
+                    rotated_samples = []
+                    for sample in samples:
+                        new_sample = sample.clone()
+                        new_sample[:, :, 0] = sample[:, :, 1]
+                        new_sample[:, :, 1] = sample[:, :, 0]
+                        rotated_samples.append(new_sample)
+                    samples += rotated_samples
+                    descriptors += descriptors
 
             if synthetic_samples["spatial_offset_static"]:
                 # Create synthetic samples by adding noise to the original samples
-                new_descriptors = []
-                new_samples = []
-
-                # Add noise to the samples
                 # Amount of noise is in the synthetic_samples["spatial_offset_static"]
 
                 noise = synthetic_samples["spatial_offset_static"]
 
-                # Move the whole sample in a random direction
-                for sample in samples:
-                    new_sample = sample.clone()
-                    direction = torch.randint(
-                        0, 4, (1,)
-                    )  # 0: Up, 1: Down, 2: Left, 3: Right
+                for _ in range(synthetic_samples["spatial_offset_repeats"]):
+                    new_samples = []
+                    # Repeat N times
+                    for sample in samples:
+                        # Move the whole sample in a random direction
+                        new_sample = sample.clone()
+                        direction = torch.randint(
+                            0, 4, (1,)
+                        )  # 0: Up, 1: Down, 2: Left, 3: Right
 
-                    # Move the sample in the direction of the noise
-                    # NOTE: This is a very naive way of adding noise
-                    if direction == 0:
-                        new_sample[:, :, 1] += noise
-                    elif direction == 1:
-                        new_sample[:, :, 1] -= noise
-                    elif direction == 2:
-                        new_sample[:, :, 0] -= noise
-                    elif direction == 3:
-                        new_sample[:, :, 0] += noise
+                        # Move the sample in the direction of the noise
+                        # NOTE: This is a very naive way of adding noise
+                        if direction == 0:
+                            new_sample[:, :, 1] += noise
+                        elif direction == 1:
+                            new_sample[:, :, 1] -= noise
+                        elif direction == 2:
+                            new_sample[:, :, 0] -= noise
+                        elif direction == 3:
+                            new_sample[:, :, 0] += noise
 
-                    new_samples.append(new_sample)
+                        new_samples.append(new_sample)
 
-                samples += new_samples
-                descriptors += descriptors
+                    samples += new_samples
+                    descriptors += descriptors
 
             if synthetic_samples["shuffling"]:  # Shuffle in the end
                 # Create synthetic samples by shuffling the original samples
@@ -101,21 +119,6 @@ class HSDataset(TensorDataset):
 
                 samples += shuffled_samples
                 descriptors += new_descriptors
-
-        if downsample:
-            new_samples = []
-            for sample in samples:
-                downsample_integer = int(sample.shape[1] * downsample)
-                # Random pick
-                # pick_index = torch.randperm(sample.shape[1])[:downsample_integer]
-                # Pick the ones closest to the center
-                center = torch.tensor([0.0, 0.0], device=device)
-                distance = torch.norm(sample[:, :, :2] - center, dim=0)
-                _, pick_index = distance.topk(downsample_integer, largest=False, dim=0)
-                pick_index = slice(0, downsample_integer)
-                _sample = sample[:, pick_index]
-                new_samples.append(_sample)
-            samples = new_samples
 
         self.x = torch.concat(descriptors)  # Descriptors are the input.
         self.y = torch.concat(samples)  # Sample point cloud is the target

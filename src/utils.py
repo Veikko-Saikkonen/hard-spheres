@@ -9,6 +9,8 @@ import hypergrad
 import adabound
 import torch
 
+from src.adopt import adopt
+
 import mlflow
 
 
@@ -63,10 +65,19 @@ def build_optimizer_fn_from_config(optimizer_config):
         try:
             optimizer_class = getattr(adabound, name)
         except AttributeError:
-            optimizer_class = getattr(
-                torch.optim,
-                name,
-            )
+            try:
+                optimizer_class = getattr(
+                    torch.optim,
+                    name,
+                )
+            except AttributeError:
+                try:
+                    optimizer_class = getattr(
+                        adopt,
+                        name,
+                    )
+                except:
+                    raise AttributeError(f"Optimizer {name} not found")
 
     def optimizer_init(*args, **kwargs):
         return optimizer_class(*args, **kwargs, **optimizer_config)

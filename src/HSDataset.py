@@ -15,6 +15,7 @@ class HSDataset(TensorDataset):
         descriptor_list=["phi"],
         synthetic_samples=False,
         downsample=0,
+        keep_r=True # Keep the r coordinate in the descriptor
     ):
         print("Creating Dataset")
         print("Descriptor List: ", descriptor_list)
@@ -119,6 +120,10 @@ class HSDataset(TensorDataset):
 
                 samples += shuffled_samples
                 descriptors += new_descriptors
+
+        if not keep_r:
+            for i, sample in enumerate(samples):
+                samples[i] = sample[:, :, :2]
 
         self.x = torch.concat(descriptors)  # Descriptors are the input.
         self.y = torch.concat(samples)  # Sample point cloud is the target

@@ -14,6 +14,7 @@ from src.utils import log_nested_dict
 from src.models.losses import build_loss_fn
 from src.models.losses import CryinGANDiscriminatorLoss
 from src.models import CryinGAN
+from src.metrics import packing_fraction
 
 
 class GAN(nn.Module):
@@ -23,6 +24,7 @@ class GAN(nn.Module):
         testset,
         generator_model: torch.nn.Module = None,
         discriminator_model: torch.nn.Module = None,
+        predictor_model: torch.nn.Module = None,
         **run_params,
     ):
         super().__init__()
@@ -32,36 +34,36 @@ class GAN(nn.Module):
         if generator_model is None:
             # This means the user has not provided a generator model, but has provided parameters for the generator
             generator_params = run_params["generator"]
-
-            # 'name' tells the class of the generator, which may be HSGenerator or another class
-            _class = getattr(
-                __import__(
-                    "src.models.CryinGAN",
-                    fromlist=[run_params["generator"]["name"]],
-                ),
-                run_params["generator"]["name"],
-            )
-
-            generator_params.pop("name")  # Remove the name parameter
-            generator = _class(**generator_params)
+            self.generator = CryinGAN.build_model(**run_params["generator"])
         else:
-            generator = generator_model
+            self.generator = generator_model
             run_params["generator"] = {}
-            run_params["generator"]["name"] = type(generator).__name__
+            run_params["generator"]["name"] = type(self.generator).__name__
+
+
         if discriminator_model is None:
-            discriminator = HSDiscriminator(**run_params["discriminator"])
+            self.discriminator = CryinGAN.build_model(**run_params["discriminator"])
         else:
-            discriminator = discriminator_model
+            self.discriminator = discriminator_model
             run_params["discriminator"] = {}
-            run_params["discriminator"]["name"] = type(discriminator).__name__
+            run_params["discriminator"]["name"] = type(self.discriminator).__name__
+
+        if predictor_model is None:
+            pass # NOTE: Implement this
+            # self.predictor = CryinGAN.build_model(**run_params["predictor"])
+        else:
+            self.predictor = predictor_model
+            run_params["predictor"] = {}
+            run_params["predictor"]["name"] = type(self.predictor).__name__
 
         self.run_params = run_params
         self.trainset = trainset
         self.testset = testset
         self.device = device
 
-        self.generator = generator.to(device)
-        self.discriminator = discriminator.to(device)
+        self.generator = self.generator.to(device)
+        self.discriminator = self.discriminator.to(device)
+        # self.predictor = self.predictor.to(device)
 
         self.d_criterion = build_loss_fn(**run_params["training"]["d_loss"])
         self.g_criterion = build_loss_fn(**run_params["training"]["g_loss"])
@@ -299,7 +301,7 @@ class GAN(nn.Module):
 
             d_loss.backward()
 
-            d_grad_clip_limit = 10_000
+            d_grad_clip_limit = 50
             d_grad_norm = torch.nn.utils.clip_grad_norm_(
                 self.discriminator.parameters(),
                 d_grad_clip_limit,
@@ -335,7 +337,7 @@ class GAN(nn.Module):
             )  # We want the generator to generate images that the discriminator thinks are real
             g_loss.backward()
 
-            g_grad_clip_limit = 10_000
+            g_grad_clip_limit = 50
             g_grad_norm = torch.nn.utils.clip_grad_norm_(
                 self.generator.parameters(), g_grad_clip_limit, error_if_nonfinite=True
             )  # Clip gradients, TODO: move to config
@@ -346,6 +348,15 @@ class GAN(nn.Module):
             self.g_optimizer.step()
 
             mean_loss_g += g_loss.item()
+
+            # Log metrics
+
+            if self.run_params["metrics"]["packing_fraction"]:
+                packing_fraction_real = packing_fraction(real_images, self.run_params["metrics"]["packing_fraction_fix_r"], self.run_params["metrics"]["packing_fraction_box_size"])
+                packing_fraction_fake = packing_fraction(fake_images, self.run_params["metrics"]["packing_fraction_fix_r"], self.run_params["metrics"]["packing_fraction_box_size"])
+
+                mlflow.log_metric("packing_fraction_real", packing_fraction_real, step=epoch)
+                mlflow.log_metric("packing_fraction_fake", packing_fraction_fake, step=epoch)
 
             # output example s
             # discriminator_output = self.discriminator(fake_images)

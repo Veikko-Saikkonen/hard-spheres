@@ -99,76 +99,10 @@ class HSGeneratorLoss(nn.Module):
 
         return loss
 
-    def _distance_loss_NND(self, real_images, fake_images):
-        # Take 2 nearest neighbours and calculate the distance between them
-        # Compare the distribution of distances between the real and fake images
-        # Loss based on the distribution of distances
+    
 
-        quantiles = torch.tensor(  # TODO: Make this a parameter
-            # [0.05, 0.25, 0.50, 0.75, 0.95],
-            [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
-            dtype=torch.float32,
-            device=fake_images.device,
-        )
 
-        def _per_batch_distance_loss(real_images, fake_images):
-            nnd_real = NNDescent(
-                real_images[:, :2],
-                metric="euclidean",
-                n_neighbors=60,
-                low_memory=False,
-            )
-            dist_real = nnd_real.query(real_images[:, :2][:, :2], k=2)[1]
-
-            nnd_fake = NNDescent(
-                fake_images[:, :2],
-                metric="euclidean",
-                n_neighbors=60,
-                low_memory=False,
-            )
-            dist_fake = nnd_fake.query(fake_images[:, :2][:, :2], k=2)[1]
-
-            real_yq = torch.quantile(dist_real, quantiles, dim=1)
-            fake_rq = torch.quantile(dist_fake, quantiles, dim=1)
-
-            loss = self.mse(fake_rq, real_yq)
-            return loss
-
-        # Call the loss for each batch
-
-        loss = torch.stack(
-            [
-                _per_batch_distance_loss(real_images[i], fake_images[i])
-                for i in range(real_images.shape[0])
-            ]
-        ).mean()
-
-        return loss
-
-    def _nn_distance_loss(self, real_images, fake_images):
-        # Compute k-nearest neighbors distances for both real and fake images
-        k = 10  # Number of nearest neighbors
-        quantiles = torch.tensor(
-            [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
-            dtype=torch.float32,
-            device=fake_images.device,
-        )
-
-        def compute_knn_distances(images):
-            nnd = NNDescent(
-                images[:, :2], metric="euclidean", n_neighbors=k, low_memory=False
-            )
-            distances, _ = nnd.query(images[:, :2], k=k)
-            return distances
-
-        real_distances = compute_knn_distances(real_images)
-        fake_distances = compute_knn_distances(fake_images)
-
-        real_yq = torch.quantile(real_distances, quantiles, dim=1)
-        fake_rq = torch.quantile(fake_distances, quantiles, dim=1)
-
-        loss = self.mse(fake_rq, real_yq)
-        return loss
+        
 
     def _physical_feasibility_loss(self, fake_points):
 

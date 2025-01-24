@@ -1,7 +1,7 @@
 from torch import nn
 from torch import rand, randn
 import torch
-
+import sys
 import numpy as np
 from mlflow.types import Schema, TensorSpec
 
@@ -17,7 +17,7 @@ class Generator(nn.Module):
         out_samples=2000,
         channel_coefficient=1,
         clip_output: tuple = False,
-        fix_r=False,
+        fix_r=None,
         r_options=[],
     ):
         super().__init__()
@@ -317,7 +317,7 @@ class CCCGenerator(nn.Module):
         latent_dim=6,
         channels_coefficient=1,
         clip_output: tuple = False,
-        fix_r=False,
+        fix_r=None,
     ):
 
         # Inspired by: https://dl-acm-org.libproxy.aalto.fi/doi/abs/10.1145/3532213.3532218
@@ -463,8 +463,8 @@ class CCCGenerator(nn.Module):
 
         out = self.model(noise)
 
-        if self.fix_r is not None:
-            if out.size(-1) < 3:
+        if self.fix_r is not None and self.out_dimensions > 2:
+            if (out.size(-1) < 3):
                 out = torch.cat(
                     [out, self.fix_r * torch.ones_like(out[..., 0:1])], dim=-1
                 )
@@ -554,3 +554,28 @@ class CCCGeneratorWithDiffusion(CCCGenerator):
             / 100 # Reduce the noise a bit
         )
         return self.real_sample + noise  
+    
+
+class CCCPredictor(nn.Module):
+    """A CryinGAN style predictor to classify the atoms for a sample containing the x-y coordinates.
+    """
+
+    def __init__(self):
+        super().__init__()
+    
+
+
+
+
+def build_model(**kwargs):
+    """Interface to build selected model with parameters passed as kwargs"""
+
+    _class = kwargs.pop("class")
+
+    # Dynamically fetch the right class from this module
+    try:
+        model = getattr(sys.modules[__name__], _class)(**kwargs)
+    except AttributeError:
+        raise ValueError(f"Model class {_class} not found in module {__name__}")
+    
+    return model

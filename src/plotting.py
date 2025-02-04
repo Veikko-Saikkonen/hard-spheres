@@ -17,7 +17,8 @@ def plot_pointcloud(pointcloud, ax=None, plot_radius=True):
         ax.scatter(
             xs, ys, alpha=0.5, s=10
         )  # TODO: Size of the points is not correct in comparison to the grid size
-
+    
+    plt.grid(visible=True, which="both")
     return ax
 
 

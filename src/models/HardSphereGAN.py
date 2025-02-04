@@ -57,12 +57,15 @@ class GAN(nn.Module):
             run_params["predictor"]["name"] = type(self.predictor).__name__
 
         self.run_params = run_params
-        self.trainset = trainset
-        self.testset = testset
         self.device = device
 
+        # Get models and data to right device
+        
+        self.trainset = trainset.to(device)
+        self.testset = testset.to(device)
         self.generator = self.generator.to(device)
         self.discriminator = self.discriminator.to(device)
+
         # self.predictor = self.predictor.to(device)
 
         self.d_criterion = build_loss_fn(**run_params["training"]["d_loss"])

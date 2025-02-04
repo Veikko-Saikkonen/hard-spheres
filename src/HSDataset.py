@@ -15,7 +15,8 @@ class HSDataset(TensorDataset):
         descriptor_list=["phi"],
         synthetic_samples=False,
         downsample=0,
-        keep_r=True # Keep the r coordinate in the descriptor
+        keep_r=True, # Keep the r coordinate in the descriptor,
+        **kwargs # TODO: Lazy to accept everything
     ):
         print("Creating Dataset")
         print("Descriptor List: ", descriptor_list)

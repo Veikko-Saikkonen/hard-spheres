@@ -25,12 +25,15 @@ class HSGeneratorLoss(nn.Module):
         radius_loss,
         grid_density_loss,
         physical_feasibility_loss,
+        grid_order_loss,
         coefficients={
             "gan_loss": 1,
             "radius_loss": 1,
             "grid_density_loss": 1,
             "physical_feasibility_loss": 1,
             "distance_loss": 1,
+            "grid_order_loss": 1,
+            "grid_order_k":4
         },
         distance_loss=False,
     ):
@@ -41,7 +44,9 @@ class HSGeneratorLoss(nn.Module):
         self.grid_density_loss = grid_density_loss
         self.physical_feasibility_loss = physical_feasibility_loss
         self.distance_loss = distance_loss
+        self.grid_order_loss = grid_order_loss
         self.coefficients = coefficients
+        self.grid_order_k = self.coefficients["grid_order_k"]
 
         # For logging, save the results
         self.prev_gan_loss = torch.tensor([0])
@@ -49,6 +54,7 @@ class HSGeneratorLoss(nn.Module):
         self.prev_grid_density_loss = torch.tensor([0])
         self.prev_physical_feasibility_loss = torch.tensor([0])
         self.prev_distance_loss = torch.tensor([0])
+        self.prev_grid_order_loss = torch.tensor([0])
 
         self.mse = MSELoss()
 
@@ -98,11 +104,69 @@ class HSGeneratorLoss(nn.Module):
         loss = self.mse(fake_rq, real_yq)
 
         return loss
+    
+    @staticmethod
+    def hexatic_order_parameter_batched(coords, k):
 
+        # Ensure coords is shape (N, 2)
+        assert coords.dim() == 3 and coords.size(2) == 2, \
+            "coords must be of shape (B,N,2)."
+        
+        # Number of points
+        N = coords.size(1)
+
+        # 1) Compute pairwise differences: shape (N, N, 2)
+        #    diffs[i, j, :] = coords[j] - coords[i]
+        #    (the vector from i to j)
+        diffs = coords.unsqueeze(2) - coords.unsqueeze(1)
+
+        # 2) Compute the angles for each pair using atan2(y, x).
+        #    angles[i, j] = angle of vector from i to j
+        angles = torch.atan2(diffs[..., 1], diffs[..., 0])  # shape (N, N)
+
+        # 3) Compute exp(i * 6 * theta_{ij}).
+        #    We can leverage PyTorch's complex support:
+        # e_i6theta = torch.exp(1j * 6 * angles) # 6 in the hex lattice
+        e_i6theta = torch.exp(1j * k * angles) # Replaced with 4 in the square lattice
+
+        # 4a) Typically, we do not include the j = i term in the sum (angle to itself).
+        #    So we set the diagonal elements to zero.
+        # diag_idx = torch.arange(N)
+        # e_i6theta[diag_idx, diag_idx] = 0.0 + 0.0j
+
+        # 4b) we want to ignore everything except the n nearest neighbors
+
+        distances = torch.cdist(coords, coords, p=2)
+        # Set the diagonal to inf as that is the distance to itself and we want to ignore that
+        diag_idx = torch.arange(N)
+        distances[:, diag_idx, diag_idx] = torch.inf
+        distances_topk = torch.topk(distances, dim=1, k=k, largest=False).values.max(dim=1).values
+        mask = (distances.transpose(0,1) > distances_topk).transpose(0,1) # This takes in the top k distances and sets everything else to zero
+        e_i6theta[mask] = 0.0 + 0.0j
+        # 5) Define Ni as the number of neighbors for each point i.
+        # Count the number of neighbours per point from the mask
+
+        Ni = mask.shape[1]-mask.sum(dim=2).unsqueeze(-2) # Ni = k
+        # Ni = k
+        # 6) Sum over j for each i and normalize by Ni.
+        #    psi[i] = (1/Ni) * sum_{j != i} exp(i 6 theta_{ij})
+        # psi = e_i6theta.sum(dim=1) / Ni
+        psi = (e_i6theta / Ni).sum(dim=2)
+
+        return psi
+    
     
 
+    def _grid_order_loss(self, samples):
 
-        
+        xy = samples.clone()
+        # Compute the hexatic order parameter
+        psi_values = self.hexatic_order_parameter_batched(xy, k=self.grid_order_k)
+
+        # Compute the loss as the sum of the imaginary parts
+        loss = torch.mean(torch.sqrt(psi_values * psi_values.conj())).real
+
+        return loss
 
     def _physical_feasibility_loss(self, fake_points):
 
@@ -251,6 +315,14 @@ class HSGeneratorLoss(nn.Module):
             )
         if self.distance_loss:
             loss += self.prev_distance_loss
+
+        if self.coefficients["grid_order_loss"]:
+            self.prev_grid_order_loss = (
+            nn.ReLU()(self._grid_order_loss(fake_images) - self._grid_order_loss(real_images))
+            )   
+        
+        if self.grid_order_loss:
+            loss += self.prev_grid_order_loss
 
         return loss
 

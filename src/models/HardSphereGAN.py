@@ -429,6 +429,7 @@ class GAN(nn.Module):
             self.g_criterion.prev_physical_feasibility_loss.item()
         )
         g_loss_distance = self.g_criterion.prev_distance_loss.item()
+        g_grid_order_loss = self.g_criterion.prev_grid_order_loss.item()
 
         if "prev_gradient_penalty" in self.d_criterion.__dict__:
             d_penalty_gradient = self.d_criterion.prev_gradient_penalty.item()
@@ -451,6 +452,9 @@ class GAN(nn.Module):
             )
         if g_loss_distance > 0:
             mlflow.log_metric("G_Distance_loss", g_loss_distance, step=epoch)
+        if g_grid_order_loss is not None:
+            mlflow.log_metric("G_Grid_loss", g_grid_order_loss, step=epoch)
+            
 
         mlflow.log_metric("D_Gradient_penalty", d_penalty_gradient, step=epoch)
         mlflow.log_metric("D_GAN_loss", d_loss_gan, step=epoch)

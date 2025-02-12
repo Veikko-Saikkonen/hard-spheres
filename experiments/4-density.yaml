@@ -42,26 +42,26 @@ metrics:
 training:
   batch_size: 32
   d_loss:
-    mu: 0.5
+    mu: 1.0
     name: CryinGANDiscriminatorLoss
   device: mps
   early_stopping_headstart: 0
   early_stopping_patience: -1
   early_stopping_tolerance: 0.001
-  epochs: 1000
+  epochs: 100
   g_loss:
     name: HSGeneratorLoss
     coefficients:
       distance_loss: 0
       gan_loss: 1
-      grid_density_loss: 0
+      grid_density_loss: 10
       physical_feasibility_loss: 0
       radius_loss: 0
       grid_order_loss: 0
       grid_order_k: 4 # 4 for hex, 6 for square, don't use for fullscale
     distance_loss: 0
     gan_loss: 1
-    grid_density_loss: 0
+    grid_density_loss: 1
     grid_order_loss: 0
     physical_feasibility_loss: 0
     radius_loss: 0
@@ -71,14 +71,14 @@ training:
     betas:
       - 0.5
       - 0.999
-    lr: 0.0001
+    lr: 0.001
     name: Adam
     weight_decay: 0
   optimizer_g:
     betas:
       - 0.5
       - 0.999
-    lr: 0.0001
+    lr: 0.001
     name: Adam
     weight_decay: 0
-  training_ratio_dg: 3
+  training_ratio_dg: 5

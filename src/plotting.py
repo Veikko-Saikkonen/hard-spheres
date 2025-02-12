@@ -18,7 +18,7 @@ def plot_pointcloud(pointcloud, ax=None, plot_radius=True):
             xs, ys, alpha=0.5, s=10
         )  # TODO: Size of the points is not correct in comparison to the grid size
     
-    plt.grid(visible=True, which="both")
+    ax.grid(visible=True, which="both")
     return ax
 
 
@@ -50,20 +50,20 @@ def plot_sample_distributions(
     xs_fake = sample_generated_y[:, :, 0].numpy().flatten()
     ys_fake = sample_generated_y[:, :, 1].numpy().flatten()
 
-    # Kolmogorov smirnoff test
+    # Kolmogorov smirnoff test NOTE: Commented out
 
-    ks_test_x = kstest(xs_real, xs_fake, alternative="two-sided")
-    ks_test_y = kstest(ys_real, ys_fake, alternative="two-sided")
+    # ks_test_x = kstest(xs_real, xs_fake, alternative="two-sided")
+    # ks_test_y = kstest(ys_real, ys_fake, alternative="two-sided")
 
     # Plot the distributions of the different variables in different figures
     ax[0].hist(xs_real, bins=5, alpha=0.5, label="Real X")
     ax[0].hist(xs_fake, bins=5, alpha=0.5, label="Fake X")
-    ax[0].set_title("X Distribution, ks: {:.2f}, p: {:.2f}".format(ks_test_x.statistic, ks_test_x.pvalue))
+    ax[0].set_title("X Distribution")#, ks: {:.2f}, p: {:.2f}".format(ks_test_x.statistic, ks_test_x.pvalue))
     ax[0].legend()
 
     ax[1].hist(ys_real, bins=5, alpha=0.5, label="Real Y")
     ax[1].hist(ys_fake, bins=5, alpha=0.5, label="Fake Y")
-    ax[1].set_title("Y Distribution, ks: {:.2f}, p: {:.2f}".format(ks_test_y.statistic, ks_test_y.pvalue))
+    ax[1].set_title("Y Distribution")#, ks: {:.2f}, p: {:.2f}".format(ks_test_y.statistic, ks_test_y.pvalue))
     ax[1].legend()
 
     if plot_radius:
@@ -124,6 +124,8 @@ def plot_sample_figures(
 
     fig, ax = plt.subplots(1, 2, figsize=(10, 5))
 
+    ax_list = ax.flatten()
+
     # Set color palette for pyplot
     plt.set_cmap("viridis")
 
@@ -143,8 +145,9 @@ def plot_sample_figures(
     ax[0].axis("equal")
     ax[1].axis("equal")
 
-    [a.set_xlim(-0.1, 1.1) for a in ax]
-    [a.set_ylim(-0.1, 1.1) for a in ax]
+    # [a.set_xlim(-0.1, 1.1) for a in ax_list]
+    # [a.set_ylim(-0.1, 1.1) for a in ax_list]
+
 
     if not return_fig:
         plt.show()

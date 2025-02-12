@@ -18,6 +18,8 @@ def packing_fraction(samples, fix_r=None, box_size=1, batch=False):
         float: The packing fraction.
     """
 
+    # TODO: Replace with the pixel based variant.
+
     # Calculate the packing fraction
     if batch:
         # Calculate the packing fraction for each sample in the batch

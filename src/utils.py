@@ -23,7 +23,7 @@ def log_nested_dict(d, prefix=""):
             mlflow.log_param(f"{prefix}{key}", value)
 
 
-def build_run_name():
+def build_run_name(run_name=None):
     # Gets two random nouns and an UUID for a human readable string name for a run.
     import uuid
     import random
@@ -48,8 +48,12 @@ def build_run_name():
 
     # Generate a UUID
     unique_id = uuid.uuid4()
-    # Concatenate the nouns and UUID to form a unique, human-readable name
-    model_name = f"{noun1}-{noun2}-{unique_id}"
+
+    if run_name is None:
+        # Concatenate the nouns and UUID to form a unique, human-readable name
+        model_name = f"{noun1}-{noun2}-{unique_id}"
+    else:
+        model_name = f"{run_name}-{unique_id}"
 
     return model_name
 

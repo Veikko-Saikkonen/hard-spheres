@@ -106,8 +106,7 @@ class GAN(nn.Module):
         if batch_size is None:
             batch_size = self.run_params["training"]["batch_size"]
 
-        if run_name is None:
-            run_name = build_run_name()
+        run_name = build_run_name(run_name)
 
         print(
             f'Starting run {run_name}...\nTime: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}'
@@ -304,7 +303,7 @@ class GAN(nn.Module):
 
             d_loss.backward()
 
-            d_grad_clip_limit = 50
+            d_grad_clip_limit = 50 # TODO: Parametrize
             d_grad_norm = torch.nn.utils.clip_grad_norm_(
                 self.discriminator.parameters(),
                 d_grad_clip_limit,

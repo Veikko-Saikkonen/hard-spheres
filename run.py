@@ -84,7 +84,7 @@ def load_data(experiment_file):
  
 
 
-def run_experiment(experiment_file):
+def run_experiment(experiment_file, run_name=None):
 
     # Load data into pandas
 
@@ -118,6 +118,7 @@ def run_experiment(experiment_file):
         epochs=experiment_file["training"]["epochs"],
         batch_size=experiment_file["training"]["batch_size"],
         experiment_name=experiment_file["experiment_name"],
+        run_name=run_name,
         requirements_file = Path(experiment_file["requirements_file"]),
         save_model=True
     )
@@ -135,13 +136,14 @@ def main():
     args = parser.parse_args()
 
     experiment_files = glob(os.path.join('experiments', '*.yaml'))
-    print(f"Found {len(experiment_files)} experiment files")
     if args.include != 'all':
         experiment_files = [f for f in experiment_files if re.search(args.include, f)]
 
     if args.exclude:
         experiment_files = [f for f in experiment_files if not re.search(args.exclude, f)]
 
+    print(f"Found {len(experiment_files)} experiment file(s)")
+    
     for experiment_file in experiment_files:
         for _ in range(args.repeats):
             print(f"Running experiment: {experiment_file}")
@@ -154,7 +156,7 @@ def main():
                     experiment_dict = key
                     break # NOTE: This is a hack, need to find proper way to parse yaml
                 # Add code to run the experiment here
-                run_experiment(experiment_dict)
+                run_experiment(experiment_dict, run_name=experiment_file.split("/")[-1].split(".")[0])
 
 
 

@@ -84,7 +84,7 @@ def load_data(experiment_file):
  
 
 
-def run_experiment(experiment_file, run_name=None):
+def run_experiment(experiment_file, run_name=None, experiment=""):
 
     # Load data into pandas
 
@@ -117,7 +117,7 @@ def run_experiment(experiment_file, run_name=None):
     gan.train_n_epochs(
         epochs=experiment_file["training"]["epochs"],
         batch_size=experiment_file["training"]["batch_size"],
-        experiment_name=experiment_file["experiment_name"],
+        experiment_name=experiment,
         run_name=run_name,
         requirements_file = Path(experiment_file["requirements_file"]),
         save_model=True
@@ -128,14 +128,21 @@ def run_experiment(experiment_file, run_name=None):
 def main():
     """Take in the arguments and run the experiments"""
 
-    parser = argparse.ArgumentParser(description="Run experiments for the paper")
-    parser.add_argument('--include', type=str, default='all', help='Regex to include experiment configurations')
+    parser = argparse.ArgumentParser(description="Run selected experiments")
+    parser.add_argument('--experiment', type=str, help='Regex to include experiment')
+    parser.add_argument('--include', type=str, default='all', help='Regex to include experiment files')
     parser.add_argument('--repeats', type=int, default=1, help='Number of times to repeat each experiment')
-    parser.add_argument('--exclude', type=str, default=None, help='Regex to exclude experiment configurations')
+    parser.add_argument('--exclude', type=str, default=None, help='Regex to exclude experiment files')
 
     args = parser.parse_args()
 
-    experiment_files = glob(os.path.join('experiments', '*.yaml'))
+    experiment = args.experiment
+
+    experiment_files_path = os.path.join("experiments", experiment)
+    regex_postfix = "*.yaml"
+
+    experiment_files = glob(os.path.join(experiment_files_path, regex_postfix))
+
     if args.include != 'all':
         experiment_files = [f for f in experiment_files if re.search(args.include, f)]
 
@@ -143,20 +150,26 @@ def main():
         experiment_files = [f for f in experiment_files if not re.search(args.exclude, f)]
 
     print(f"Found {len(experiment_files)} experiment file(s)")
+
+    if len(experiment_files) == 0:
+        print(f"No experiment files found in {experiment_files_path}, exiting")
+        exit()
     
-    for experiment_file in experiment_files:
+    print(f"Running experiment: {experiment}")
+    for run_file in experiment_files:
         for _ in range(args.repeats):
-            print(f"Running experiment: {experiment_file}")
+
+            run_name = run_file.split("/")[-1].split(".")[0]
             
-            with open(experiment_file, "r") as f:
+            with open(run_file, "r") as f:
             # Create a dict from the yaml string
-                experiment_dict = yaml.full_load_all(f)
-                experiment_dict = experiment_dict
-                for key in experiment_dict:
-                    experiment_dict = key
+                run_dict = yaml.full_load_all(f)
+                run_dict = run_dict
+                for key in run_dict:
+                    run_dict = key
                     break # NOTE: This is a hack, need to find proper way to parse yaml
                 # Add code to run the experiment here
-                run_experiment(experiment_dict, run_name=experiment_file.split("/")[-1].split(".")[0])
+                run_experiment(run_dict, run_name=run_name, experiment=experiment)
 
 
 

@@ -1,4 +1,3 @@
-experiment_name: "Square-lattice-small-scale"
 requirements_file: ./top-level-requirements.txt
 dataset:
   name: Sq

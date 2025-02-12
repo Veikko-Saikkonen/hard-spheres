@@ -1,4 +1,3 @@
-experiment_name: "Square-lattice-small-scale"
 requirements_file: ./top-level-requirements.txt
 dataset:
   name: Sq
@@ -52,16 +51,16 @@ training:
   g_loss:
     name: HSGeneratorLoss
     coefficients:
-      distance_loss: 10
+      distance_loss: 0
       gan_loss: 1
       grid_density_loss: 10
       physical_feasibility_loss: 0
       radius_loss: 0
       grid_order_loss: 0
       grid_order_k: 4 # 4 for hex, 6 for square, don't use for fullscale
-    distance_loss: 1
+    distance_loss: 0
     gan_loss: 1
-    grid_density_loss: 0
+    grid_density_loss: 1
     grid_order_loss: 0
     physical_feasibility_loss: 0
     radius_loss: 0

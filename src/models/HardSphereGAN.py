@@ -14,7 +14,7 @@ from src.utils import log_nested_dict
 from src.models.losses import build_loss_fn
 from src.models.losses import CryinGANDiscriminatorLoss
 from src.models import CryinGAN
-from src.metrics import packing_fraction
+from src.metrics import packing_fraction, packing_fraction_pixel, packing_fraction_pixel_memory_friendly
 
 
 class GAN(nn.Module):
@@ -304,6 +304,7 @@ class GAN(nn.Module):
             d_loss.backward()
 
             d_grad_clip_limit = 50 # TODO: Parametrize
+
             d_grad_norm = torch.nn.utils.clip_grad_norm_(
                 self.discriminator.parameters(),
                 d_grad_clip_limit,
@@ -339,6 +340,7 @@ class GAN(nn.Module):
             )  # We want the generator to generate images that the discriminator thinks are real
             g_loss.backward()
 
+
             g_grad_clip_limit = 50
             g_grad_norm = torch.nn.utils.clip_grad_norm_(
                 self.generator.parameters(), g_grad_clip_limit, error_if_nonfinite=True
@@ -351,29 +353,23 @@ class GAN(nn.Module):
 
             mean_loss_g += g_loss.item()
 
-            # Log metrics
+        # Log metrics
 
-            if self.run_params["metrics"]["packing_fraction"]:
-                packing_fraction_real = packing_fraction(real_images, self.run_params["metrics"]["packing_fraction_fix_r"], self.run_params["metrics"]["packing_fraction_box_size"])
-                packing_fraction_fake = packing_fraction(fake_images, self.run_params["metrics"]["packing_fraction_fix_r"], self.run_params["metrics"]["packing_fraction_box_size"])
+        if self.run_params["metrics"]["packing_fraction"]:
+            packing_fraction_real = packing_fraction_pixel(real_images, total_area=self.run_params["metrics"]["packing_fraction_box_size"], r_fix=self.run_params["metrics"]["packing_fraction_fix_r"], resolution=256) # NOTE: Reduce for fullscale
+            packing_fraction_fake = packing_fraction_pixel(fake_images, total_area=self.run_params["metrics"]["packing_fraction_box_size"], r_fix=self.run_params["metrics"]["packing_fraction_fix_r"], resolution=256)
 
-                mlflow.log_metric("packing_fraction_real", packing_fraction_real, step=epoch)
-                mlflow.log_metric("packing_fraction_fake", packing_fraction_fake, step=epoch)
+            packing_fraction_real = packing_fraction_real.mean()
+            packing_fraction_fake = packing_fraction_fake.mean()
 
-            # output example s
-            # discriminator_output = self.discriminator(fake_images)
-            # discriminator_output_real = self.discriminator(real_images)
+            packing_fraction_diff = packing_fraction_real - packing_fraction_fake
+            packing_fraction_diff_abs = torch.abs(packing_fraction_diff)
 
-            # # Transfer to csv
-            # import pandas as pd
+            mlflow.log_metric("packing_fraction_real", packing_fraction_real, step=epoch)
+            mlflow.log_metric("packing_fraction_fake", packing_fraction_fake, step=epoch)
+            mlflow.log_metric("packing_fraction_diff", packing_fraction_diff, step=epoch)
+            mlflow.log_metric("packing_fraction_diff_abs", packing_fraction_diff_abs, step=epoch)
 
-            # print(real_images.shape)
-            # pd.Series(
-            #     discriminator_output_real.to("cpu").detach().numpy().flatten()
-            # ).to_csv("discriminator_output_real.csv")
-            # pd.Series(discriminator_output.to("cpu").detach().numpy().flatten()).to_csv(
-            #     "discriminator_output.csv"
-            # )
 
         # Log the optimizer hyperparameters
         if hasattr(self.d_optimizer, "param_groups"):

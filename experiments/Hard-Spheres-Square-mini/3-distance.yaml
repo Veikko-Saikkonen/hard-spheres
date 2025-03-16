@@ -6,7 +6,7 @@ dataset:
   descriptor_list:
     - phi
   subpath: disorder-0.2
-  downsample: 0.005 # 1.0 = 1600
+  downsample: 0.165 # 1.0 = 1600
   keep_r: false
   synthetic_samples:
     rotational: 0
@@ -14,9 +14,10 @@ dataset:
     spatial_offset_repeats: 0
     spatial_offset_static: 0.
 discriminator:
+  latent_dim: 1056
   channels_coefficient: 1
   class: CCCGDiscriminator
-  in_samples: 8
+  in_samples: 264
   input_channels: 2
   kernel_size:
     - 1
@@ -31,17 +32,18 @@ generator:
     - 1
   latent_dim: 128
   out_dimensions: 2
-  out_samples: 8
+  out_samples: 264
   rand_features: 64
   stride: 1
 metrics:
-  packing_fraction: false
+  packing_fraction: true
   packing_fraction_box_size: 1
   packing_fraction_fix_r: 0.0049
+  packing_fraction_resolution: 256
 training:
   batch_size: 32
   d_loss:
-    mu: 1.0
+    mu: 10
     name: CryinGANDiscriminatorLoss
   device: mps
   early_stopping_headstart: 0
@@ -70,14 +72,14 @@ training:
     betas:
       - 0.5
       - 0.999
-    lr: 0.001
+    lr: 0.00005
     name: Adam
     weight_decay: 0
   optimizer_g:
     betas:
       - 0.5
       - 0.999
-    lr: 0.001
+    lr: 0.00005
     name: Adam
     weight_decay: 0
   training_ratio_dg: 5

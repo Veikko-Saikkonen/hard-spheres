@@ -6,7 +6,7 @@ dataset:
   descriptor_list:
     - phi
   subpath: disorder-0.2
-  downsample: 0.005 # 1.0 = 1600
+  downsample: False # 1.0 = 1600
   keep_r: false
   synthetic_samples:
     rotational: 0
@@ -16,7 +16,7 @@ dataset:
 discriminator:
   channels_coefficient: 1
   class: CCCGDiscriminator
-  in_samples: 8
+  in_samples: 1600
   input_channels: 2
   kernel_size:
     - 1
@@ -31,37 +31,38 @@ generator:
     - 1
   latent_dim: 128
   out_dimensions: 2
-  out_samples: 8
+  out_samples: 1600
   rand_features: 64
   stride: 1
 metrics:
-  packing_fraction: false
+  packing_fraction: true
   packing_fraction_box_size: 1
   packing_fraction_fix_r: 0.0049
+  packing_fraction_resolution: 256
 training:
   batch_size: 32
   d_loss:
-    mu: 0.5
+    mu: 1.0
     name: CryinGANDiscriminatorLoss
   device: mps
   early_stopping_headstart: 0
   early_stopping_patience: -1
   early_stopping_tolerance: 0.001
-  epochs: 1000
+  epochs: 3000
   g_loss:
     name: HSGeneratorLoss
     coefficients:
       distance_loss: 0
       gan_loss: 1
-      grid_density_loss: 0
+      grid_density_loss: 10
       physical_feasibility_loss: 0
       radius_loss: 0
-      grid_order_loss: 0
+      grid_order_loss: 1
       grid_order_k: 4 # 4 for hex, 6 for square, don't use for fullscale
     distance_loss: 0
     gan_loss: 1
-    grid_density_loss: 0
-    grid_order_loss: 0
+    grid_density_loss: 1
+    grid_order_loss: 1
     physical_feasibility_loss: 0
     radius_loss: 0
   generator_headstart: 0
@@ -70,14 +71,14 @@ training:
     betas:
       - 0.5
       - 0.999
-    lr: 0.0001
+    lr: 0.001
     name: Adam
     weight_decay: 0
   optimizer_g:
     betas:
       - 0.5
       - 0.999
-    lr: 0.0001
+    lr: 0.001
     name: Adam
     weight_decay: 0
-  training_ratio_dg: 3
+  training_ratio_dg: 5

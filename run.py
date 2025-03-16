@@ -107,9 +107,8 @@ def run_experiment(experiment_file, run_name=None, experiment=""):
 
     print("Models created, summary below.\n")
 
-    print(summary(gan.generator, input_data=sample_x_mps, depth=2))
-    print(summary(gan.discriminator, input_data=sample_y_mps, depth=2))
-
+    summary(gan.generator, input_data=sample_x_mps, depth=2)
+    summary(gan.discriminator, input_data=sample_y_mps, depth=2)
     _out = gan.generate(sample_x)[0]
 
     plot_pointcloud(_out, plot_radius=False)

@@ -72,7 +72,7 @@ class HSGeneratorLoss(nn.Module):
 
         return loss
 
-    def _distance_loss(self, real_images, fake_images, k=3):
+    def _distance_loss(self, real_images, fake_images, k=3, eps=1e-6):
         # Loss based on the distribution of distances
         quantiles = torch.tensor(  # TODO: Make this a parameter
             [0.05, 0.5, 0.95],
@@ -80,10 +80,12 @@ class HSGeneratorLoss(nn.Module):
             device=fake_images.device,
         )
 
-        dist_real = torch.cdist(
-            real_images[:, :, :2], real_images[:, :, :2], p=2
-        )  # TODO: Try p=infinity
-        dist_fake = torch.cdist(fake_images[:, :, :2], fake_images[:, :, :2], p=2)
+        # dist_real = torch.cdist(
+        #     real_images[:, :, :2], real_images[:, :, :2], p=2
+        # )  # TODO: Try p=infinity
+        # dist_fake = torch.cdist(fake_images[:, :, :2], fake_images[:, :, :2], p=2)
+        dist_real = torch.sqrt(((real_images[:, :, :2].unsqueeze(2) - real_images[:, :, :2].unsqueeze(1)) ** 2).sum(-1) + eps)
+        dist_fake = torch.sqrt(((fake_images[:, :, :2].unsqueeze(2) - fake_images[:, :, :2].unsqueeze(1)) ** 2).sum(-1) + eps)
 
         # Take the k nearest neighbours
         if isinstance(int(k), int) and k:
@@ -105,56 +107,119 @@ class HSGeneratorLoss(nn.Module):
 
         return loss
     
-    @staticmethod
-    def hexatic_order_parameter_batched(coords, k):
+    # @staticmethod
+    # def hexatic_order_parameter_batched(coords, k):
 
-        # Ensure coords is shape (N, 2)
-        assert coords.dim() == 3 and coords.size(2) == 2, \
-            "coords must be of shape (B,N,2)."
+    #     # Ensure coords is shape (N, 2)
+    #     assert coords.dim() == 3 and coords.size(2) == 2, \
+    #         "coords must be of shape (B,N,2)."
         
-        # Number of points
-        N = coords.size(1)
+    #     # Number of points
+    #     N = coords.size(1)
 
-        # 1) Compute pairwise differences: shape (N, N, 2)
-        #    diffs[i, j, :] = coords[j] - coords[i]
-        #    (the vector from i to j)
+    #     # 1) Compute pairwise differences: shape (N, N, 2)
+    #     #    diffs[i, j, :] = coords[j] - coords[i]
+    #     #    (the vector from i to j)
+    #     diffs = coords.unsqueeze(2) - coords.unsqueeze(1)
+
+    #     # 2) Compute the angles for each pair using atan2(y, x).
+    #     #    angles[i, j] = angle of vector from i to j
+    #     angles = torch.atan2(diffs[..., 1], diffs[..., 0])  # shape (N, N)
+
+    #     # 3) Compute exp(i * 6 * theta_{ij}).
+    #     #    We can leverage PyTorch's complex support:
+    #     # e_i6theta = torch.exp(1j * 6 * angles) # 6 in the hex lattice
+    #     e_i6theta = torch.exp(1j * k * angles) # Replaced with 4 in the square lattice
+
+    #     # 4a) Typically, we do not include the j = i term in the sum (angle to itself).
+    #     #    So we set the diagonal elements to zero.
+    #     # diag_idx = torch.arange(N)
+    #     # e_i6theta[diag_idx, diag_idx] = 0.0 + 0.0j
+
+    #     # 4b) we want to ignore everything except the n nearest neighbors
+
+    #     distances = torch.cdist(coords, coords, p=2)
+    #     # Set the diagonal to inf as that is the distance to itself and we want to ignore that
+    #     diag_idx = torch.arange(N)
+    #     distances[:, diag_idx, diag_idx] = torch.inf
+    #     distances_topk = torch.topk(distances, dim=1, k=k, largest=False).values.max(dim=1).values
+    #     mask = (distances.transpose(0,1) > distances_topk).transpose(0,1) # This takes in the top k distances and sets everything else to zero
+    #     e_i6theta[mask] = 0.0 + 0.0j
+    #     # 5) Define Ni as the number of neighbors for each point i.
+    #     # Count the number of neighbours per point from the mask
+
+    #     Ni = mask.shape[1]-mask.sum(dim=2).unsqueeze(-2) # Ni = k
+    #     # Ni = k
+    #     # 6) Sum over j for each i and normalize by Ni.
+    #     #    psi[i] = (1/Ni) * sum_{j != i} exp(i 6 theta_{ij})
+    #     # psi = e_i6theta.sum(dim=1) / Ni
+    #     psi = (e_i6theta / Ni).sum(dim=2)
+
+    #     return psi
+    
+    @staticmethod
+    def hexatic_order_parameter_batched(coords, k, sigma=None, eps=1e-6):
+        """
+        Computes the local hexatic order parameter for each point in a batch,
+        with additional numerical stabilization to avoid exploding gradients.
+
+        Args:
+            coords: Tensor of shape (B, N, 2), where B is the batch size and N is the number of points.
+            k:      Number of nearest neighbors used to define the kth-distance threshold.
+                    (For a hexatic order parameter, k is typically 6.)
+            sigma:  Softness parameter for the sigmoid weighting. If None, it is set to 0.1 times the kth distance.
+            eps:    A small constant to prevent numerical instabilities.
+
+        Returns:
+            psi:    Tensor of shape (B, N) containing a complex number (the order parameter)
+                    for each point.
+        """
+        B, N, _ = coords.shape
+
+        # 1. Compute pairwise differences: shape (B, N, N, 2)
         diffs = coords.unsqueeze(2) - coords.unsqueeze(1)
-
-        # 2) Compute the angles for each pair using atan2(y, x).
-        #    angles[i, j] = angle of vector from i to j
-        angles = torch.atan2(diffs[..., 1], diffs[..., 0])  # shape (N, N)
-
-        # 3) Compute exp(i * 6 * theta_{ij}).
-        #    We can leverage PyTorch's complex support:
-        # e_i6theta = torch.exp(1j * 6 * angles) # 6 in the hex lattice
-        e_i6theta = torch.exp(1j * k * angles) # Replaced with 4 in the square lattice
-
-        # 4a) Typically, we do not include the j = i term in the sum (angle to itself).
-        #    So we set the diagonal elements to zero.
-        # diag_idx = torch.arange(N)
-        # e_i6theta[diag_idx, diag_idx] = 0.0 + 0.0j
-
-        # 4b) we want to ignore everything except the n nearest neighbors
-
-        distances = torch.cdist(coords, coords, p=2)
-        # Set the diagonal to inf as that is the distance to itself and we want to ignore that
-        diag_idx = torch.arange(N)
-        distances[:, diag_idx, diag_idx] = torch.inf
-        distances_topk = torch.topk(distances, dim=1, k=k, largest=False).values.max(dim=1).values
-        mask = (distances.transpose(0,1) > distances_topk).transpose(0,1) # This takes in the top k distances and sets everything else to zero
-        e_i6theta[mask] = 0.0 + 0.0j
-        # 5) Define Ni as the number of neighbors for each point i.
-        # Count the number of neighbours per point from the mask
-
-        Ni = mask.shape[1]-mask.sum(dim=2).unsqueeze(-2) # Ni = k
-        # Ni = k
-        # 6) Sum over j for each i and normalize by Ni.
-        #    psi[i] = (1/Ni) * sum_{j != i} exp(i 6 theta_{ij})
-        # psi = e_i6theta.sum(dim=1) / Ni
-        psi = (e_i6theta / Ni).sum(dim=2)
+        
+        # 2. Stabilize the x-component: if nearly zero, add eps.
+        diff_x = diffs[..., 0]
+        # Create a mask where diff_x is too small (absolute value below eps)
+        near_zero = diff_x.abs() < eps
+        diff_x = diff_x + eps * near_zero.float()  # add eps where needed
+        
+        # 3. Compute angles using the stabilized x-component: shape (B, N, N)
+        angles = torch.atan2(diffs[..., 1], diff_x)
+        
+        # 4. Compute exp(i * k * theta) for each pair: shape (B, N, N)
+        e_iktheta = torch.exp(1j * k * angles)
+        
+        # 5. Compute pairwise distances manually (Euclidean) with eps for stability
+        distances = torch.sqrt(((coords.unsqueeze(2) - coords.unsqueeze(1)) ** 2).sum(-1) + eps)
+        
+        # Set self-distances to infinity so that a point is never its own neighbor.
+        diag_mask = torch.eye(N, dtype=torch.bool, device=coords.device).unsqueeze(0).expand(B, N, N)
+        distances = distances.masked_fill(diag_mask, float('inf'))
+        
+        # 6. For each point, compute the kth smallest distance (neighbor threshold)
+        kth_distance = torch.topk(distances, k, dim=2, largest=False).values[..., -1].detach()  # shape (B, N)
+        
+        # 7. Define sigma if not provided, and ensure sigma is not too small.
+        if sigma is None:
+            sigma = 0.1 * kth_distance.unsqueeze(-1).clamp(min=eps)  # shape (B, N, 1)
+        else:
+            sigma = sigma * torch.ones_like(kth_distance.unsqueeze(-1))
+        sigma = sigma.clamp(min=eps)
+        
+        # 8. Compute soft weights for neighbor contributions:
+        #    Use the sigmoid on a clamped argument to avoid overflow.
+        arg = (kth_distance.unsqueeze(-1) - distances) / sigma
+        arg = arg.clamp(min=-50, max=50)  # avoid extremely large exponents
+        weights = torch.sigmoid(arg)      # shape (B, N, N)
+        
+        # 9. Compute a weighted sum and normalize by the sum of weights.
+        weighted_sum = (e_iktheta * weights).sum(dim=2)  # shape (B, N)
+        weights_sum = weights.sum(dim=2).clamp(min=eps)    # shape (B, N)
+        psi = weighted_sum / weights_sum
 
         return psi
-    
     
 
     def _grid_order_loss(self, samples):
@@ -164,8 +229,7 @@ class HSGeneratorLoss(nn.Module):
         psi_values = self.hexatic_order_parameter_batched(xy, k=self.grid_order_k)
 
         # Compute the loss as the sum of the imaginary parts
-        loss = torch.mean(torch.sqrt(psi_values * psi_values.conj())).real
-
+        loss = -torch.mean(torch.sqrt(psi_values * psi_values.conj())).real
         return loss
 
     def _physical_feasibility_loss(self, fake_points):
@@ -317,10 +381,7 @@ class HSGeneratorLoss(nn.Module):
             loss += self.prev_distance_loss
 
         if self.coefficients["grid_order_loss"]:
-            self.prev_grid_order_loss = (
-            nn.ReLU()(self._grid_order_loss(fake_images) - self._grid_order_loss(real_images))
-            )   
-        
+            self.prev_grid_order_loss = self._grid_order_loss(fake_images) * self.coefficients["grid_order_loss"]
         if self.grid_order_loss:
             loss += self.prev_grid_order_loss
 

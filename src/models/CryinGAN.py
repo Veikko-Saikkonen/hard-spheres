@@ -203,8 +203,11 @@ class CCCGDiscriminator(nn.Module):
         in_samples=2000,
         kernel_size=(1, 1),
         channels_coefficient=1,
+        latent_dim=36,
     ):
         super().__init__()
+
+        channels = [int(c*channels_coefficient) for c in [512, 512, 256]]
 
         # TODO: Make parameters configurable, need bigger model
         self.input_shape = (in_samples, input_channels)
@@ -221,47 +224,50 @@ class CCCGDiscriminator(nn.Module):
             ]
         )
 
+        assert (int(channels[2]*in_samples / latent_dim) == channels[2]*in_samples / latent_dim), "Latent dim must be a divisor of the input samples times the last channel"
+
         self.main = nn.Sequential(
             # Convolutional layer 2
             nn.Conv2d(
                 input_channels,
-                64 * (2 ** (channels_coefficient - 1)),
+                channels[0],
                 kernel_size=kernel_size,
                 stride=1,
                 padding=0,
             ),
-            nn.LeakyReLU(0.2, inplace=False),
+            nn.LeakyReLU(0.2, inplace=True),
             # # # Convolutional layer 2
             nn.Conv2d(
-                int(64 * (2 ** (channels_coefficient - 1))),
-                int(128 * (2 ** (channels_coefficient - 1))),
+                channels[0],
+                channels[1],
                 kernel_size=kernel_size,
                 stride=1,
                 padding=0,
             ),
-            nn.LeakyReLU(0.2, inplace=False),
+            nn.LeakyReLU(0.2, inplace=True),
             # Convolutional layer 3
             nn.Conv2d(
-                int(128 * (2 ** (channels_coefficient - 1))),
-                int(256 * (2 ** (channels_coefficient - 1))),
+                channels[1],
+                channels[2],
                 kernel_size=kernel_size,
                 stride=1,
                 padding=0,
             ),
-            nn.LeakyReLU(0.2, inplace=False),
-            nn.AdaptiveAvgPool2d(1),
+            nn.LeakyReLU(0.2, inplace=True),
             # nn.AdaptiveMaxPool2d(1),
             nn.Flatten(1, -1),
+            nn.AvgPool1d(int(channels[2]*in_samples / latent_dim), count_include_pad=False), # Real paper has one per element, we have one element but want to simplify the data
+            # nn.AdaptiveAvgPool2d(6), # Real paper has one per element, we have one element but want to simplify the data
         )
 
         self.fc_layers = nn.Sequential(
             # Fully connected layers
             # NOTE: Adjusted the width of the layers to the nearest power of 2 in comparison to the original paper
-            nn.Linear(256 * (2 ** (channels_coefficient - 1)), 1024),
+            nn.Linear(latent_dim, 1000),
             nn.LeakyReLU(0.2, inplace=False),
-            nn.Linear(1024, 256),
+            nn.Linear(1000, 200),
             nn.LeakyReLU(0.2, inplace=False),
-            nn.Linear(256, 10),
+            nn.Linear(200, 10),
             # nn.Sigmoid(),
             nn.AdaptiveAvgPool1d(1),  # Average pooling, as in the CryinGAN paper
             # The other paper used fully connected layers all the way
@@ -300,8 +306,7 @@ class CCCGDiscriminator(nn.Module):
         # Then each atom is concatenated to the next one
         conv_output = self.main(x)
         # Finally flatten and pass through fully connected layers
-        conv_output_flat = conv_output.view(conv_output.size(0), -1)
-        output = self.fc_layers(conv_output_flat)
+        output = self.fc_layers(conv_output)
 
         return output
 
@@ -381,7 +386,8 @@ class CCCGenerator(nn.Module):
         latent_features,
     ):
 
-        channels_base = 32
+        channels=[int(c*channels_coefficient) for c in [256,512,256]]
+        
 
         model = nn.Sequential(
             ## First fully connected layer
@@ -400,43 +406,43 @@ class CCCGenerator(nn.Module):
             # # Transposed Convolution 1
             nn.ConvTranspose2d(
                 latent_dim,
-                (channels_base * 2**2) * (2 ** (channels_coefficient - 1)),
+                channels[0],
                 kernel_size=(1, out_dimensions),
                 stride=1,
                 padding=0,
             ),
-            nn.BatchNorm2d(128 * (2 ** (channels_coefficient - 1))),
-            nn.ReLU(),
+            nn.BatchNorm2d(channels[0], eps=0.8),
+            nn.ReLU(inplace=True),
             # # # Transposed Convolution 2
             nn.ConvTranspose2d(
-                (channels_base * 2**2) * (2 ** (channels_coefficient - 1)),
-                (channels_base * 2**1) * (2 ** (channels_coefficient - 1)),
+                channels[0],
+                channels[1],
                 kernel_size=(1, 1),
                 stride=1,
                 padding=0,
             ),
-            nn.BatchNorm2d((channels_base * 2**1) * (2 ** (channels_coefficient - 1))),
-            nn.ReLU(),
+            nn.BatchNorm2d(channels[1]),
+            nn.ReLU(inplace=True),
             # # Transposed Convolution 3
             nn.ConvTranspose2d(
-                (channels_base * 2**1) * (2 ** (channels_coefficient - 1)),
-                (channels_base * 2**0) * (2 ** (channels_coefficient - 1)),
+                channels[1],
+                channels[2],
                 kernel_size=(1, 1),
                 stride=1,
                 padding=0,
             ),
-            nn.BatchNorm2d((channels_base * 2**0) * (2 ** (channels_coefficient - 1))),
-            nn.ReLU(),
+            nn.BatchNorm2d(channels[2]),
+            nn.ReLU(inplace=True),
             # # Transposed Convolution 4 to get to 3 channels, 2000 samples and 1 feature
             nn.ConvTranspose2d(
-                (channels_base * 2**0) * (2 ** (channels_coefficient - 1)),
+                channels[2],
                 1,
                 kernel_size=(1, 1),
                 stride=1,
                 padding=0,
             ),
-            # nn.Sigmoid(), # not in the papers
             nn.Flatten(1, 2),
+            nn.Sigmoid(),
         )
         return model
 

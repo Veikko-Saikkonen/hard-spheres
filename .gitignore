@@ -168,3 +168,4 @@ mlartifacts
 
 # Ignore HParamOptimization files
 experiments/HparamOptimization*/*.yaml
+.DS_Store

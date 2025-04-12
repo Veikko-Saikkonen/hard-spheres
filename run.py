@@ -86,8 +86,15 @@ def load_data(experiment_file):
 
 def run_experiment(experiment_file, run_name=None, experiment=""):
 
-    # Load data into pandas
+    if isinstance(experiment_file, str):
+        with open(experiment_file, "r") as f:
+            experiment_file = yaml.full_load_all(f)
+            for key in experiment_file:
+                experiment_file = key
+    else:
+        assert isinstance(experiment_file, dict), f"'experiment_file' must be a dict or str, got: {type(experiment_file)}"
 
+    # Load data into pandas
     dataset = load_data(experiment_file)
 
     print(f"data loaded, samples: {len(dataset)}")
@@ -167,8 +174,8 @@ def main():
                 for key in run_dict:
                     run_dict = key
                     break # NOTE: This is a hack, need to find proper way to parse yaml
-                # Add code to run the experiment here
-                run_experiment(run_dict, run_name=run_name, experiment=experiment)
+            # Add code to run the experiment here
+            run_experiment(run_dict, run_name=run_name, experiment=experiment)
 
 
 

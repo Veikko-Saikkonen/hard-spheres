@@ -1,0 +1,9 @@
+torch>=2.5.1
+ase~=3.24.0
+numpy
+pandas
+seaborn
+scikit-learn
+scipy
+matplotlib
+tqdm

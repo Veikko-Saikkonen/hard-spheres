@@ -8,13 +8,18 @@
 #SBATCH --mem-per-cpu=16000
 #SBATCH --gres=gpu:v100:1
 
-# Create a virtual environment
-python3 -m venv .venv
+# Create a virtual environment for the project if it doesn't exist
+if [ ! -d ".venv" ]; then
+    echo "Creating virtual environment..."
+    python3 -m venv .venv
+else
+    echo "Virtual environment already exists. Activating it."
+fi
 source .venv/bin/activate
 module load pytorch/2.2
 
-# Install dependencies
-pip install -r additional_requirements.txt
+# Make sure required modules are loaded
+pip install -r additional_requirements_with_dist.txt
 
 # Define name of the experiment
 # Experiment name

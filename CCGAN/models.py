@@ -100,11 +100,13 @@ class CoordinateDiscriminator(nn.Module):
 
 
 class DistanceDiscriminator(nn.Module):
-    def __init__(self, args, n_atoms_elements):
+    def __init__(self, args, n_atoms_elements, n_label_features, label_dim):
         super(DistanceDiscriminator, self).__init__()
         self.n_elements = len(n_atoms_elements)
         self.n_atoms_elements = n_atoms_elements
         self.n_neighbors = args.n_neighbors
+        self.label_dim = label_dim
+        self.n_label_features = n_label_features
         
         self.model = nn.Sequential(nn.Conv2d(in_channels = 1, out_channels = 512, kernel_size = (1,self.n_neighbors), stride = 1, padding = 0),nn.LeakyReLU(0.2, inplace=True),
                                    nn.Conv2d(in_channels = 512, out_channels = 512, kernel_size = (1,1), stride = 1, padding = 0),nn.LeakyReLU(0.2,inplace=True),
@@ -114,7 +116,15 @@ class DistanceDiscriminator(nn.Module):
         for i in range(self.n_elements):
             self.avgpool_elements.append(nn.AvgPool2d(kernel_size = (self.n_atoms_elements[i],1)))
 
-        self.feature_layer = nn.Sequential(nn.Linear(256*self.n_elements, 1000), nn.LeakyReLU(0.2, inplace =True), nn.Linear(1000,200),nn.LeakyReLU(0.2, inplace = True))
+        # Use a linear layer to project the label to the same dimension as the output
+        self.label_proj = nn.Sequential(
+            nn.Linear(self.n_label_features, self.label_dim),
+            nn.ReLU(True)
+        )
+
+
+        self.feature_layer = nn.Sequential(nn.Linear(256*self.n_elements + self.label_dim, 1000), nn.LeakyReLU(0.2, inplace =True), nn.Linear(1000,200),nn.LeakyReLU(0.2, inplace = True))
+        # self.feature_layer = nn.Sequential(nn.Linear(256*self.n_elements, 1000), nn.LeakyReLU(0.2, inplace =True), nn.Linear(1000,200),nn.LeakyReLU(0.2, inplace = True))
         self.output = nn.Sequential(nn.Linear(200,10))
 
     def forward(self, x, labels):
@@ -133,7 +143,13 @@ class DistanceDiscriminator(nn.Module):
         output_all = torch.cat(output_elements, dim=-2)
         output_all = output_all.view(B, -1)   # Flatten all channels
 
-        feature = self.feature_layer(output_all)  # torch.Size is (current_batch_size, 200)
+        # Get the label embedding
+        label_embed = self.label_proj(labels)  # shape: (B, label_dim) 
+
+        # Concatenate the features and the label embedding
+        combined_features = torch.cat([output_all, label_embed], dim=1)
+
+        feature = self.feature_layer(combined_features)  # torch.Size is (current_batch_size, 200)
         return feature, self.output(feature)   # output(feature) has size (current_batch_size, 10)
         
 

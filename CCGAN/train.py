@@ -36,7 +36,7 @@ def weights_init(m):
         init.xavier_uniform_(m.weight)
         init.constant_(m.bias, 0.0)
 
-def calc_gradient_penalty(netD, real_data, fake_data, cuda):
+def calc_gradient_penalty(netD, real_data, real_labels, fake_data, cuda, mps):
     "Calculates the WGAN gradient penalty"
     batch_size = real_data.size(0)
     # Uniform random number from the interval [0,1). This is used to give the interpolation point.
@@ -45,24 +45,34 @@ def calc_gradient_penalty(netD, real_data, fake_data, cuda):
     alpha = alpha.expand(batch_size, int(real_data.nelement()/batch_size)).contiguous().view(
             batch_size, 1, real_data.size(-2), real_data.size(-1))
     
+    # Move alpha to the GPU if available
     if cuda:
-        alpha = alpha.cuda() if cuda else alpha
-    elif torch.backends.mps.is_available():
+        alpha = alpha.cuda()
+    elif mps:
+        # Move alpha to the MPS device
         alpha = alpha.to(torch.device("mps"))
     # Interpolates between real and fake data
-
     interpolates = alpha * real_data + ((1 - alpha) * fake_data)
 
     if cuda:
         interpolates = interpolates.cuda()
+    elif mps:
+        # Move interpolates to the MPS device
+        interpolates = interpolates.to(torch.device("mps"))
     interpolates = autograd.Variable(interpolates, requires_grad=True)
 
-    feature, disc_interpolates = netD(interpolates)
+    feature, disc_interpolates = netD(interpolates, real_labels)
+
+    grad_outputs = torch.ones(disc_interpolates.size())
+    if cuda:
+        grad_outputs = grad_outputs.cuda()
+    elif mps:
+        # Move grad_outputs to the MPS device
+        grad_outputs = grad_outputs.to(torch.device("mps"))
 
     # Calculate the sum of gradients of outputs with respect to the inputs
     gradients = autograd.grad(outputs=disc_interpolates, inputs=interpolates,
-                              grad_outputs=torch.ones(disc_interpolates.size()).cuda() if cuda else torch.ones(
-                                  disc_interpolates.size()),
+                              grad_outputs=grad_outputs,
                               create_graph=True, retain_graph=True, only_inputs=True)[0]
     gradients = gradients.view(gradients.size(0), -1)
 
@@ -122,7 +132,10 @@ def main():
     
     ## Determine whether to use GPU
     cuda = not args.disable_cuda and torch.cuda.is_available()
+    mps = not args.disable_cuda and torch.backends.mps.is_available() and torch.backends.mps.is_built()
+
     print('cuda is', cuda)
+    print('mps is', mps)
     
     ## Initialize best distance and starting epoch
     best_distance = 1e10
@@ -136,7 +149,16 @@ def main():
 
     ## Read and prepare training data
     print("Reading training data...")
-    ase_atoms = read(args.training_data, index=':', format='extxyz')
+    ase_atoms = []
+    if os.path.isdir(args.training_data):
+        for root, _, files in os.walk(args.training_data):
+            print("Reading folder: ", root)
+            for file in files:
+                if file.endswith('.extxyz'):
+                    file_path = os.path.join(root, file)
+                    ase_atoms.extend(read(file_path, index=':', format='extxyz'))
+    else:
+        ase_atoms = read(args.training_data, index=':', format='extxyz')
     lattice = ase_atoms[0].get_cell()[:]   # Lattice vectors, array of shape (3,3)
     n_atoms_total = len(ase_atoms[0])   # Total number of atoms in each structure
     _, idx, n_atoms_elements = np.unique(ase_atoms[0].numbers, return_index=True, return_counts=True)
@@ -152,25 +174,54 @@ def main():
         batch_coords = batch_coords.view(batch_coords.shape[0], 1, n_atoms_total, 3).float()
         if cuda:
             batch_coords = batch_coords.cuda()
+        elif mps:
+            batch_coords = batch_coords.to(device='mps')
         batch_dataset = BatchDistance(batch_coords, n_neighbors=args.n_neighbors, lat_matrix=lattice)
         batch_coords_with_dist = batch_dataset.append_dist()
         train_data.append(batch_coords_with_dist.cpu())
     train_data = torch.cat(train_data)
     # Remove unneeded objects to free up memory
+    
+    # Get the labels (only phi for now)
+    train_labels = np.array([ase_atoms[i].info["phi"] for i in range(len(ase_atoms))])
+    train_labels = torch.FloatTensor(train_labels).unsqueeze(1)
+
+    # Create custom dataset that includes the labels
+    class CustomDataset(torch.utils.data.Dataset):
+        def __init__(self, data, labels):
+            self.data = data
+            self.labels = labels
+
+        def __len__(self):
+            return len(self.data)
+
+        def __getitem__(self, idx):
+            return self.data[idx], self.labels[idx]
+    dataset = CustomDataset(train_data, train_labels)
+    
+    
     del ase_atoms, train_coords_all, prep_dataloader, batch_coords, batch_dataset, batch_coords_with_dist
     print("=> Training data prepared.")
 
 	## Configure data loader
-    dataloader = torch.utils.data.DataLoader(train_data, batch_size = args.batch_size, shuffle = True)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size = args.batch_size, shuffle = True)
 
 	## Initialize generator and discriminators
-    generator = Generator(args, n_atoms_total)
-    coord_disc = CoordinateDiscriminator(args, n_atoms_elements)
-    dist_disc = DistanceDiscriminator(args, n_atoms_elements)
+    # generator = Generator(args, n_atoms_total)
+    generator = Generator(args, n_atoms_total, n_label_features=train_labels.shape[1], label_dim=args.gen_label_dim)
+    # coord_disc = CoordinateDiscriminator(args, n_atoms_elements)
+    coord_disc = CoordinateDiscriminator(args, n_atoms_elements, n_label_features=train_labels.shape[1], label_dim=args.disc_label_dim)
+    dist_disc = DistanceDiscriminator(args, n_atoms_elements, n_label_features=train_labels.shape[1], label_dim=args.disc_label_dim)
     if cuda:
         generator.cuda()
         coord_disc.cuda()
         dist_disc.cuda()
+    elif mps:
+        generator.to(device='mps')
+        coord_disc.to(device='mps')
+        dist_disc.to(device='mps')
+
+    print("=> Models initialized.")
 
 	## Optimizers
     optimizer_G = torch.optim.Adam(generator.parameters(), lr=args.g_lr, betas=(args.b1, args.b2))
@@ -250,6 +301,10 @@ def main():
             current_batch_size = real_coords_with_dis.shape[0] 
             if cuda:
                 real_coords_with_dis = real_coords_with_dis.cuda()
+            elif mps:
+                real_coords_with_dis = real_coords_with_dis.to(device='mps')
+
+            ## Prepare tensor of real distances
             real_coords = real_coords_with_dis[:,:,:,:3]
             real_distances = real_coords_with_dis[:,:,:,3:]
             
@@ -266,6 +321,8 @@ def main():
             z = torch.FloatTensor(np.random.normal(0,1,(current_batch_size, args.latent_dim)))   # torch.Size([current_batch_size, args.latent_dim])
             if cuda :
                 z = z.cuda()  
+            elif mps:
+                z = z.to(device='mps')
             ## Feed fake coordinates into Coordinate Discriminator
             fake_coords = generator(z)   # size is (current_batch_size, 1, n_atoms_total, 3)
             fake_feature, D_fake = coord_disc(fake_coords.detach())  # fake feature has size (current_batch_size, 200), D_fake has size (current_batch_size, 10)
@@ -283,8 +340,8 @@ def main():
             optimizer_CD.zero_grad()
             optimizer_DD.zero_grad()
             
-            gradient_penalty_D = calc_gradient_penalty(coord_disc, real_coords, fake_coords, cuda)
-            gradient_penalty_dist = calc_gradient_penalty(dist_disc, real_distances, fake_distances, cuda)
+            gradient_penalty_D = calc_gradient_penalty(coord_disc, real_coords, fake_coords, cuda, mps)
+            gradient_penalty_dist = calc_gradient_penalty(dist_disc, real_distances, fake_distances, cuda, mps)
             
             D_cost = D_fake - D_real + gradient_penalty_D + args.weight_dist*(D_dist_fake - D_dist_real + 
                                                                               gradient_penalty_dist)
@@ -314,6 +371,8 @@ def main():
                 z = torch.FloatTensor(np.random.normal(0,1,(current_batch_size, args.latent_dim)))
                 if cuda :
                     z = z.cuda()
+                elif mps:
+                    z = z.to(device='mps')
                 fake_coords = generator(z)   # size is (current_batch_size, 1, n_atoms_total, 3)
                 ## Feed fake coordinates into Coordinate Discriminator
                 fake_feature_G, D_fake_G = coord_disc(fake_coords)

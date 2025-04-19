@@ -325,13 +325,11 @@ def main():
             
             ## Generate fake coordinates
             z = torch.FloatTensor(np.random.normal(0,1,(current_batch_size, args.latent_dim)))   # torch.Size([current_batch_size, args.latent_dim])
-            if cuda :
+            if cuda:
                 z = z.cuda()  
             elif mps:
                 z = z.to(device='mps')
             ## Feed fake coordinates into Coordinate Discriminator
-            print("Labels shape is ", real_labels.shape)
-            print("noise shape is ", z.shape)
             fake_coords = generator(z, real_labels)   # size is (current_batch_size, 1, n_atoms_total, 3)
             fake_feature, D_fake = coord_disc(fake_coords.detach(), real_labels.detach())  # fake feature has size (current_batch_size, 200), D_fake has size (current_batch_size, 10)
             D_fake = D_fake.mean()
@@ -347,9 +345,9 @@ def main():
             ## Compute gradient and do optimizer step. Save losses. 
             optimizer_CD.zero_grad()
             optimizer_DD.zero_grad()
-            
-            gradient_penalty_D = calc_gradient_penalty(coord_disc, real_coords, fake_coords, cuda, mps)
-            gradient_penalty_dist = calc_gradient_penalty(dist_disc, real_distances, fake_distances, cuda, mps)
+
+            gradient_penalty_D = calc_gradient_penalty(coord_disc, real_coords, real_labels, fake_coords, cuda, mps)
+            gradient_penalty_dist = calc_gradient_penalty(dist_disc, real_distances, real_labels, fake_distances, cuda, mps)
             
             D_cost = D_fake - D_real + gradient_penalty_D + args.weight_dist*(D_dist_fake - D_dist_real + 
                                                                               gradient_penalty_dist)

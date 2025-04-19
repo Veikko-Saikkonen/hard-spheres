@@ -12,9 +12,15 @@ EXPERIMENT_NAME="2-with-dist"
 #SBATCH --mem-per-cpu=16000
 #SBATCH --gres=gpu:v100:1
 
-# Load custom module
-module load pytorch/2.2
-source .venv/bin/activate
+if [ ! -d ".venv" ]; then
+    echo "Creating virtual environment..."
+    bash create-venv.sh
+else
+    echo "Virtual environment already exists. Activating it..."
+    # Load custom module
+    module load pytorch/2.2
+    source .venv/bin/activate
+fi
 
 # Define name of the experiment
 # Experiment name

@@ -11,3 +11,4 @@ tqdm
 adabound
 torchinfo
 fvcore
+mlflow

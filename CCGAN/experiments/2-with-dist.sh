@@ -1,5 +1,7 @@
-#!/bin/bash
-#SBATCH --job-name=ccgan-training
+#!/bin/bash -l
+# Job name and output files
+EXPERIMENT_NAME="2-with-dist"
+#SBATCH --job-name=ccgan-training-${EXPERIMENT_NAME}
 #SBATCH --account=project_2010169
 #SBATCH --output="{EXPERIMENT_NAME}.out"
 #SBATCH --error="{EXPERIMENT_NAME}.err"
@@ -19,12 +21,8 @@ else
 fi
 source .venv/bin/activate
 
-# Make sure required modules are loaded
-pip install -r additional_requirements_with_dist.txt
-
 # Define name of the experiment
 # Experiment name
-EXPERIMENT_NAME="2-with-dist"
 RESULTS_DIR="results/${EXPERIMENT_NAME}"
 
 # If directory already exists, remove it

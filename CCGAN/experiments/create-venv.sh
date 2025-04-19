@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -l
 #SBATCH --job-name=ccgan-create-venv
 #SBATCH --output=ccgan-create-venv.out
 #SBATCH --error=ccgan-create-venv.err

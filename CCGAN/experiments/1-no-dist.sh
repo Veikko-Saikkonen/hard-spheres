@@ -1,9 +1,7 @@
-#!/bin/bash
-
+#!/bin/bash -l
 EXPERIMENT_NAME="1-no-dist"
-
 # Job name and output files
-#SBATCH --job-name=ccgan-training
+#SBATCH --job-name=ccgan-training-${EXPERIMENT_NAME}
 #SBATCH --account=project_2010169
 #SBATCH --output="{EXPERIMENT_NAME}.out"
 #SBATCH --error="{EXPERIMENT_NAME}.err"
@@ -22,9 +20,6 @@ else
     echo "Virtual environment already exists. Activating it."
 fi
 source .venv/bin/activate
-
-# Make sure required modules are loaded
-pip install -r additional_requirements_no_dist.txt
 
 # Define name of the experiment
 # Experiment name

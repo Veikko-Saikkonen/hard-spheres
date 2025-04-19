@@ -3,7 +3,7 @@
 #SBATCH --job-name=ccgan-training-2-with-dist
 #SBATCH --account=project_2010169
 #SBATCH --output=2-with-dist.out
-#SBATCH --error=2-with-dist.err"
+#SBATCH --error=2-with-dist.err
 #SBATCH --partition=gpu
 #SBATCH --time=12:00:00
 #SBATCH --ntasks=1

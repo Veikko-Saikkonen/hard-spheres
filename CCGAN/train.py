@@ -317,7 +317,7 @@ def main():
             D_real = D_real.mean()
             
             ## Feed real distances into Distance Discriminator
-            real_dist_feature, D_dist_real = dist_disc(real_distances) # real_dist_feature is tensor of (current_batch_size, 200). D_dist_real is the real_dist_feature fed into linear layer to reduce from 200 to 10 values.
+            real_dist_feature, D_dist_real = dist_disc(real_distances, real_labels) # real_dist_feature is tensor of (current_batch_size, 200). D_dist_real is the real_dist_feature fed into linear layer to reduce from 200 to 10 values.
             D_dist_real = D_dist_real.mean()
             
             

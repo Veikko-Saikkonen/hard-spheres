@@ -6,7 +6,7 @@ import torch
 from torch import autograd
 import torch.nn.init as init
 from models import Generator, CoordinateDiscriminator, DistanceDiscriminator
-from tools import BatchDistance
+from tools import BatchDistance2D
 import csv
 import sys
 import shutil
@@ -180,7 +180,7 @@ def main():
         elif mps:
             batch_coords = batch_coords.to(device='mps')
             
-        batch_dataset = BatchDistance(batch_coords, n_neighbors=args.n_neighbors, lat_matrix=lattice)
+        batch_dataset = BatchDistance2D(batch_coords, n_neighbors=args.n_neighbors, lat_matrix=lattice)
         batch_coords_with_dist = batch_dataset.append_dist()
         train_data.append(batch_coords_with_dist.cpu())
     train_data = torch.cat(train_data)
@@ -337,7 +337,7 @@ def main():
             D_fake = D_fake.mean()
             ## Feed fake distances into Distance Discriminator
             end_fake = time.time()   # time stamp for fake structures
-            fake_dataset = BatchDistance(fake_coords, n_neighbors=args.n_neighbors, lat_matrix=lattice)
+            fake_dataset = BatchDistance2D(fake_coords, n_neighbors=args.n_neighbors, lat_matrix=lattice)
             fake_distances = fake_dataset.append_dist()[:,:,:,3:]
             data_time_fake.update(time.time() - end_fake)   # measure data prep time
             fake_dist_feature, D_dist_fake = dist_disc(fake_distances.detach(), real_labels.detach())
@@ -386,7 +386,7 @@ def main():
                 fake_feature_G, D_fake_G = coord_disc(fake_coords, real_labels)
                 D_fake_G = D_fake_G.mean()
                 ## Feed fake distances into Distance Discriminator
-                fake_dataset = BatchDistance(fake_coords, n_neighbors=args.n_neighbors, lat_matrix=lattice)
+                fake_dataset = BatchDistance2D(fake_coords, n_neighbors=args.n_neighbors, lat_matrix=lattice)
                 fake_distances = fake_dataset.append_dist()[:,:,:,3:]
                 fake_dist_feature_G, D_dist_fake_G = dist_disc(fake_distances, real_labels)
                 D_dist_fake_G = D_dist_fake_G.mean()       

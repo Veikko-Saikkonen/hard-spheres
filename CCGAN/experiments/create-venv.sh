@@ -7,7 +7,7 @@
 #SBATCH --time=00:15:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
-#SBATCH --mem-per-cpu=24000
+#SBATCH --mem-per-cpu=32000
 
 # Create a virtual environment for the project if it doesn't exist
 echo "Creating virtual environment..."

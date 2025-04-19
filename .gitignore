@@ -172,3 +172,7 @@ mlartifacts
 experiments/HparamOptimization*/*.yaml
 results
 .DS_Store
+
+
+# Ignore slurm output files from the cluster
+slurm-*.out

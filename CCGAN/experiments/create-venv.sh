@@ -13,12 +13,12 @@
 # Create a virtual environment for the project if it doesn't exist
 module load pytorch/2.2
 echo "Creating virtual environment..."
-python3 -m venv --system-site-packages ccgan-venv
-source ccgan-venv/bin/activate
+python3 -m venv --system-site-packages .venv
+source .venv/bin/activate
 pip install --upgrade pip
 pip install --upgrade setuptools
 pip install --upgrade wheel
 
 # Make sure required modules are loaded
 pip install -r requirements.txt
-pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
+pip install --no-index --no-cache-dir pytorch3d -f https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/py38_cu113_pyt1110/download.html

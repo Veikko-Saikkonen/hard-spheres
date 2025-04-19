@@ -14,7 +14,7 @@ EXPERIMENT_NAME="1-no-dist"
 
 # Load custom module
 module load pytorch/2.2
-source ccgan-venv/bin/activate
+source .venv/bin/activate
 
 # Define name of the experiment
 # Experiment name

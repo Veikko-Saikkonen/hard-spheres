@@ -1,6 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=ccgan-training
 #SBATCH --account=project_2010169
+#SBATCH --output="{EXPERIMENT_NAME}.out"
+#SBATCH --error="{EXPERIMENT_NAME}.err"
 #SBATCH --partition=gpu
 #SBATCH --time=12:00:00
 #SBATCH --ntasks=1
@@ -10,13 +12,12 @@
 
 # Create a virtual environment for the project if it doesn't exist
 if [ ! -d ".venv" ]; then
+    bash create-venv.sh
     echo "Creating virtual environment..."
-    python3 -m venv .venv
 else
     echo "Virtual environment already exists. Activating it."
 fi
 source .venv/bin/activate
-module load pytorch/2.2
 
 # Make sure required modules are loaded
 pip install -r additional_requirements_with_dist.txt

@@ -11,7 +11,7 @@
 
 
 # Create a virtual environment for the project if it doesn't exist
-echo "Creating virtual environment..."
+echo "Creating module..."
 module load pytorch/2.2
 export PYTHONUSERBASE=./ccgan-userbase
 pip install --user --upgrade pip

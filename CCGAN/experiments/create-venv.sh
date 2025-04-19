@@ -11,8 +11,9 @@
 
 
 # Create a virtual environment for the project if it doesn't exist
+module load pytorch/2.2
 echo "Creating virtual environment..."
-python3 -m venv ccgan-venv
+python3 -m venv --system-site-packages ccgan-venv
 source ccgan-venv/bin/activate
 pip install --upgrade pip
 pip install --upgrade setuptools

@@ -7,7 +7,7 @@
 #SBATCH --cpus-per-task=2
 #SBATCH --mem-per-cpu=16000
 #SBATCH --gres=gpu:v100:1
-module load pytorch
+module load pytorch/2.2
 
 # Install dependencies
 pip install -r requirements.txt
@@ -25,7 +25,6 @@ fi
 
 mkdir -p "${RESULTS_DIR}"
 
-
 python3 train.py\
         --training_data ../data/processed/samples\
         --gen_int 5\
@@ -33,8 +32,8 @@ python3 train.py\
         --n_save 20\
         --print_freq 5\
         --msave_freq 50\
-        --msave_dir "${RESULTS_DIR}"\
-        --gsave_dir "${RESULTS_DIR}"\
+        --msave_dir "${RESULTS_DIR}/"\
+        --gsave_dir "${RESULTS_DIR}/"\
         --gen_channels_1 256\
         --latent_dim 128\
         --gen_label_dim 32\

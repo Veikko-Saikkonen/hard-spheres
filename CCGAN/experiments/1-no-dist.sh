@@ -7,7 +7,7 @@
 #SBATCH --cpus-per-task=2
 #SBATCH --mem-per-cpu=16000
 #SBATCH --gres=gpu:v100:1
-module load pytorch
+module load pytorch/2.2
 
 # Install dependencies
 pip install -r requirements.txt

@@ -125,6 +125,8 @@ def main():
     parser.add_argument('--gsave_freq', type=int, default=1000, help='frequency of saving generated data, saved every "gsave_freq" epochs')
     parser.add_argument('--n_save', type=int, default=100, help='maximum number of structures to save in each saved file')
     parser.add_argument('--print_freq', type=int, default=20, help='print frequency of output, printed every "print_freq" batches')
+    parser.add_argument('--gen_label_dim', type=int, default=64, help='conditioning label laten dimension for generator')
+    parser.add_argument('--disc_label_dim', type=int, default=64, help='conditioning label laten dimension for discriminator')
     parser.add_argument('--disable_cuda', action='store_true', help='disables CUDA when called')
     
     args = parser.parse_args()

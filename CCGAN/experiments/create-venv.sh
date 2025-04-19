@@ -12,6 +12,9 @@
 # Create a virtual environment for the project if it doesn't exist
 echo "Creating virtual environment..."
 python3 -m venv .venv
+pip install --upgrade pip
+pip install --upgrade setuptools
+pip install --upgrade wheel
 source .venv/bin/activate
 module load pytorch/2.2
 

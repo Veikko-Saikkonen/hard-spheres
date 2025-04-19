@@ -169,7 +169,6 @@ def main():
     for i in range(len(ase_atoms)):
         train_coords_all.append(ase_atoms[i].get_scaled_positions())
     train_coords_all = torch.FloatTensor(np.array(train_coords_all))
-    train_coords_all = train_coords_all.unsqueeze(1)
     # Append bond distances to the coordinates
     print("Appending bond distances...")
     prep_dataloader = torch.utils.data.DataLoader(train_coords_all, batch_size = 256, shuffle = False)

@@ -181,7 +181,7 @@ def main():
         batch_dataset = BatchDistance(batch_coords, n_neighbors=args.n_neighbors, lat_matrix=lattice)
         batch_coords_with_dist = batch_dataset.append_dist()
         train_data.append(batch_coords_with_dist.cpu())
-    train_data = torch.cat(train_data)
+    train_data = torch.cat(train_data).unsqueeze(1)
     # Remove unneeded objects to free up memory
     
     # Get the labels (only phi for now)
@@ -300,7 +300,7 @@ def main():
                 p.requires_grad = True
             
             ## Prepare tensor of real coordinates
-            current_batch_size = real_coords_with_dis[0].shape[0] 
+            current_batch_size = real_labels.shape[0]
             if cuda:
                 real_coords_with_dis = real_coords_with_dis.cuda()
                 real_labels = real_labels.cuda()

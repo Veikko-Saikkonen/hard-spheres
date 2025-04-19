@@ -113,12 +113,13 @@ celerybeat.pid
 
 # Environments
 .env
-.venv
+.venv*
 env/
 venv/
 ENV/
 env.bak/
 venv.bak/
+**/.venv
 
 # Spyder project settings
 .spyderproject
@@ -154,6 +155,7 @@ cython_debug/
 
 # Data files
 
+# Ignore all data files
 data
 
 
@@ -168,4 +170,5 @@ mlartifacts
 
 # Ignore HParamOptimization files
 experiments/HparamOptimization*/*.yaml
+results
 .DS_Store

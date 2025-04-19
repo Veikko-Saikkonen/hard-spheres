@@ -14,7 +14,7 @@ source .venv/bin/activate
 module load pytorch/2.2
 
 # Install dependencies
-pip install -r requirements.txt
+pip install -r additional_requirements.txt
 
 # Define name of the experiment
 # Experiment name

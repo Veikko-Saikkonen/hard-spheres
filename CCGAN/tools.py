@@ -129,9 +129,8 @@ class BatchDistance2D(Dataset):
         pbc_cart = pbc_cart.view(B, N * 9, 3)
 
         # Prepare lengths for knn_points
-        lengths1 = torch.full((B,), N, device=self.device)
-        lengths2 = torch.full((B,), N * 9, device=self.device)
-
+        lengths1 = torch.full((B,), N, dtype=torch.long, device=self.device)
+        lengths2 = torch.full((B,), N * 9, dtype=torch.long, device=self.device)
         # Find K = n_neighbors + 1 (includes self) nearest neighbors
         sq_dists, _, _ = knn_points(
             cart, pbc_cart,
@@ -206,72 +205,4 @@ class BatchDistance(Dataset):
         # Append bond distance to fractional coordinates
         coords_with_dis = torch.cat((frac_coords, bond_dis), dim=3)
         
-        return coords_with_dis
-
-class BatchDistance2D(Dataset):
-    """
-    A Dataset wrapper that appends bond distances to each atom’s fractional coords,
-    assuming periodicity only in the x–y plane.
-
-    Parameters
-    ----------
-    coords : Tensor, shape (batch_size, 1, n_atoms, 3)
-        Fractional coordinates of each structure in the batch.
-    n_neighbors : int
-        Number of nearest neighbors (excluding self) to compute distances for.
-    lat_matrix : array-like, shape (3, 3)
-        Lattice vectors (can include a dummy z-vector; PBC only in x & y).
-
-    Returns
-    -------
-    coords_with_dis : Tensor, shape (batch_size, 1, n_atoms, 3 + n_neighbors)
-        Original fractional coords plus bond distances to n_neighbors.
-    """
-    def __init__(self, coords, n_neighbors, lat_matrix):
-        self.coords = coords
-        self.device = coords.device
-        self.n_neighbors = n_neighbors
-        # Keep full 3×3 lat matrix; periodic only applied in x/y
-        self.lat_matrix = torch.FloatTensor(lat_matrix).to(self.device)
-
-    def __len__(self):
-        return self.coords.size(0)
-
-    def __getitem__(self, idx):
-        return self.coords[idx]
-
-    def append_dist(self):
-        # coords: (B,1,N,3)
-        frac_coords = self.coords
-        B, _, N, _ = frac_coords.shape
-
-        # Convert to Cartesian: (B, N, 3)
-        cart = torch.matmul(frac_coords, self.lat_matrix)
-        cart = cart.view(B, N, 3)
-
-        # 2D PBC images: (B,1,N*9,3)
-        pbc_frac = apply_pbc_3x3_2d(frac_coords, device=self.device)
-        # To Cartesian and flatten: (B, N*9, 3)
-        pbc_cart = torch.matmul(pbc_frac, self.lat_matrix)
-        pbc_cart = pbc_cart.view(B, N * 9, 3)
-
-        # Prepare lengths for knn_points
-        lengths1 = torch.full((B,), N, dtype=torch.int32, device=self.device)
-        lengths2 = torch.full((B,), N * 9, dtype=torch.int32, device=self.device)
-
-        # Find K = n_neighbors + 1 (includes self) nearest neighbors
-        sq_dists, _, _ = knn_points(
-            cart, pbc_cart,
-            lengths1=lengths1, lengths2=lengths2,
-            K=self.n_neighbors + 1,
-            return_sorted=True
-        )  # (B, N, n_neighbors+1) squared distances
-
-        # Drop self-distance (first neighbor) and sqrt
-        dists = torch.sqrt(sq_dists[:, :, 1:])  # (B, N, n_neighbors)
-
-        # reshape to (B,1,N,n_neighbors) and concat
-        dists = dists.unsqueeze(1)
-        coords_with_dis = torch.cat((frac_coords, dists), dim=3)
-
         return coords_with_dis

@@ -181,7 +181,8 @@ def main():
         batch_dataset = BatchDistance(batch_coords, n_neighbors=args.n_neighbors, lat_matrix=lattice)
         batch_coords_with_dist = batch_dataset.append_dist()
         train_data.append(batch_coords_with_dist.cpu())
-    train_data = torch.cat(train_data).unsqueeze(1)
+    train_data = torch.cat(train_data)
+    print("Training data shape is ", train_data.shape)
     # Remove unneeded objects to free up memory
     
     # Get the labels (only phi for now)

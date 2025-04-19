@@ -129,8 +129,8 @@ class BatchDistance2D(Dataset):
         pbc_cart = pbc_cart.view(B, N * 9, 3)
 
         # Prepare lengths for knn_points
-        lengths1 = torch.full((B,), N, dtype=torch.int32, device=self.device)
-        lengths2 = torch.full((B,), N * 9, dtype=torch.int32, device=self.device)
+        lengths1 = torch.full((B,), N, device=self.device)
+        lengths2 = torch.full((B,), N * 9, device=self.device)
 
         # Find K = n_neighbors + 1 (includes self) nearest neighbors
         sq_dists, _, _ = knn_points(

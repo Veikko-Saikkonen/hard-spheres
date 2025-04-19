@@ -179,10 +179,12 @@ def main():
             batch_coords = batch_coords.cuda()
         elif mps:
             batch_coords = batch_coords.to(device='mps')
+            
         batch_dataset = BatchDistance(batch_coords, n_neighbors=args.n_neighbors, lat_matrix=lattice)
         batch_coords_with_dist = batch_dataset.append_dist()
         train_data.append(batch_coords_with_dist.cpu())
     train_data = torch.cat(train_data)
+    torch.save(train_data, 'train_data.pt')
     print("Training data shape is ", train_data.shape)
     # Remove unneeded objects to free up memory
     

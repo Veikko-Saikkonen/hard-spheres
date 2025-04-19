@@ -407,14 +407,14 @@ def main():
             np.save(gen_name, gen_file)
         
         ## Write losses and learning rate files
-        with open("losses.csv", "a", newline='') as csvfile: 
+        with open(args.msave_dir+"losses.csv", "a", newline='') as csvfile: 
             csvwriter = csv.writer(csvfile)
             if epoch == 0:
                 csvwriter.writerow(['epoch', 'distance_dis', 'cost_dis', 'cost_gen',
                                     'D_real', 'D_fake'])
             csvwriter.writerow([epoch, w_dis.avg, cost_dis.avg, cost_gen.avg,
                                 meter_D_real.avg, meter_D_fake.avg])
-        with open("learning_rate.csv", "a", newline='') as csvfile: 
+        with open(args.msave_dir+"learning_rate.csv", "a", newline='') as csvfile: 
             csvwriter = csv.writer(csvfile)
             if epoch == 0:
                 csvwriter.writerow(['epoch', 'generator_lr', 'coord_disc_lr'])
@@ -423,8 +423,8 @@ def main():
         
         # CSV files to be used when restarting training from last saved model
         if epoch % args.msave_freq == 0:
-            shutil.copyfile('losses.csv', 'losses_cp.csv')
-            shutil.copyfile('learning_rate.csv', 'learning_rate_cp.csv')
+            shutil.copyfile(args.msave_dir+'losses.csv', args.msave_dir+'losses_cp.csv')
+            shutil.copyfile(args.msave_dir+'learning_rate.csv', args.msave_dir+'learning_rate_cp.csv')
  
 
 if  __name__ == '__main__':

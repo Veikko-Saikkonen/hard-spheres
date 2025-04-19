@@ -1,4 +1,0 @@
-# Additional requirements to run on our cluster
-# Note: The versions of the packages are fixed to ensure compatibility with our cluster environment.
-git+https://github.com/facebookresearch/pytorch3d.git@stable
-ase==3.24.0

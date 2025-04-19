@@ -2,8 +2,8 @@
 # Job name and output files
 #SBATCH --job-name=ccgan-training-1-no-dist
 #SBATCH --account=project_2010169
-#SBATCH --output="{EXPERIMENT_NAME}.out"
-#SBATCH --error="{EXPERIMENT_NAME}.err"
+#SBATCH --output=1-no-dist.out
+#SBATCH --error=1-no-dist.err
 #SBATCH --partition=gpu
 #SBATCH --time=12:00:00
 #SBATCH --ntasks=1

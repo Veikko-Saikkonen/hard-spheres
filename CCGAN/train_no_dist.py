@@ -206,14 +206,18 @@ def main():
     print("=> Models initialized.")
 
     ## Print model summary
-    sample_batch_size = 32
-    z = torch.FloatTensor(np.random.normal(0,1,(sample_batch_size, args.latent_dim)))
+    # sample_batch_size = 32
+    # z = torch.FloatTensor(np.random.normal(0,1,(sample_batch_size, args.latent_dim)))
 
-    summary(generator, input_size=(z[0:sample_batch_size].size(), train_labels[0:sample_batch_size].size()), col_names=["input_size", "output_size", "num_params"])
-    summary(coord_disc, input_size=(train_coords_all[0:sample_batch_size].size(), train_labels[0:sample_batch_size].size()), col_names=["input_size", "output_size", "num_params"])
-    print("=> Model summary printed.")
+    # if cuda:
+    #     z = z.cuda()
+    # if mps:
+    #     z = z.to(device='mps')
 
-    exit()
+    # summary(generator, input_size=(z[0:sample_batch_size].size(), train_labels[0:sample_batch_size].size()), col_names=["input_size", "output_size", "num_params"])
+    # summary(coord_disc, input_size=(train_coords_all[0:sample_batch_size].size(), train_labels[0:sample_batch_size].size()), col_names=["input_size", "output_size", "num_params"])
+    # print("=> Model summary printed.")
+
 	## Optimizers
     optimizer_G = torch.optim.Adam(generator.parameters(), lr=args.g_lr, betas=(args.b1, args.b2))
     optimizer_CD = torch.optim.Adam(coord_disc.parameters(), lr=args.coord_lr, betas=(args.b1, args.b2))

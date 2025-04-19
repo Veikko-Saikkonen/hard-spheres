@@ -293,25 +293,27 @@ def main():
         batch_time = AverageMeter()  # Stores the time for batch to complete
         end = time.time()   # time stamp
         
-        for i, real_coords_with_dis in enumerate(dataloader):
+        for i, (real_coords_with_dis, real_labels) in enumerate(dataloader):
             for p in coord_disc.parameters():
                 p.requires_grad = True
             for p in dist_disc.parameters():
                 p.requires_grad = True
             
             ## Prepare tensor of real coordinates
-            current_batch_size = real_coords_with_dis.shape[0] 
+            current_batch_size = real_coords_with_dis[0].shape[0] 
             if cuda:
                 real_coords_with_dis = real_coords_with_dis.cuda()
+                real_labels = real_labels.cuda()
             elif mps:
                 real_coords_with_dis = real_coords_with_dis.to(device='mps')
+                real_labels = real_labels.to(device='mps')
 
             ## Prepare tensor of real distances
             real_coords = real_coords_with_dis[:,:,:,:3]
             real_distances = real_coords_with_dis[:,:,:,3:]
             
             ## Feed real coordinates into Coordinate Discriminator
-            real_feature, D_real = coord_disc(real_coords) # real_feature is tensor of (current_batch_size, 200). D_real is the real_feature fed into linear layer to reduce from 200 to 10 values.
+            real_feature, D_real = coord_disc(real_coords, real_labels) # real_feature is tensor of (current_batch_size, 200). D_real is the real_feature fed into linear layer to reduce from 200 to 10 values.
             D_real = D_real.mean()
             
             ## Feed real distances into Distance Discriminator
@@ -326,15 +328,15 @@ def main():
             elif mps:
                 z = z.to(device='mps')
             ## Feed fake coordinates into Coordinate Discriminator
-            fake_coords = generator(z)   # size is (current_batch_size, 1, n_atoms_total, 3)
-            fake_feature, D_fake = coord_disc(fake_coords.detach())  # fake feature has size (current_batch_size, 200), D_fake has size (current_batch_size, 10)
+            fake_coords = generator(z, real_labels)   # size is (current_batch_size, 1, n_atoms_total, 3)
+            fake_feature, D_fake = coord_disc(fake_coords.detach(), real_labels.detach())  # fake feature has size (current_batch_size, 200), D_fake has size (current_batch_size, 10)
             D_fake = D_fake.mean()
             ## Feed fake distances into Distance Discriminator
             end_fake = time.time()   # time stamp for fake structures
             fake_dataset = BatchDistance(fake_coords, n_neighbors=args.n_neighbors, lat_matrix=lattice)
             fake_distances = fake_dataset.append_dist()[:,:,:,3:]
             data_time_fake.update(time.time() - end_fake)   # measure data prep time
-            fake_dist_feature, D_dist_fake = dist_disc(fake_distances.detach()) 
+            fake_dist_feature, D_dist_fake = dist_disc(fake_distances.detach(), real_labels.detach())
             D_dist_fake = D_dist_fake.mean()
             
 
@@ -377,12 +379,12 @@ def main():
                     z = z.to(device='mps')
                 fake_coords = generator(z)   # size is (current_batch_size, 1, n_atoms_total, 3)
                 ## Feed fake coordinates into Coordinate Discriminator
-                fake_feature_G, D_fake_G = coord_disc(fake_coords)
+                fake_feature_G, D_fake_G = coord_disc(fake_coords, real_labels)
                 D_fake_G = D_fake_G.mean()
                 ## Feed fake distances into Distance Discriminator
                 fake_dataset = BatchDistance(fake_coords, n_neighbors=args.n_neighbors, lat_matrix=lattice)
                 fake_distances = fake_dataset.append_dist()[:,:,:,3:]
-                fake_dist_feature_G, D_dist_fake_G = dist_disc(fake_distances)
+                fake_dist_feature_G, D_dist_fake_G = dist_disc(fake_distances, real_labels)
                 D_dist_fake_G = D_dist_fake_G.mean()       
  
                 

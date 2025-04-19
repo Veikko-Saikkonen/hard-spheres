@@ -20,4 +20,4 @@ pip install --user --upgrade wheel
 
 # Make sure required modules are loaded
 pip install --user -r requirements.txt
-pip install --user "git+https://github.com/facebookresearch/pytorch3d.git@stable"
+pip install --user --no-index --no-cache-dir pytorch3d -f https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/py38_cu113_pyt1110/download.html

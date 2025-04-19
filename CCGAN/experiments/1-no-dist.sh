@@ -1,7 +1,6 @@
 #!/bin/bash -l
-EXPERIMENT_NAME="1-no-dist"
 # Job name and output files
-#SBATCH --job-name=ccgan-training-${EXPERIMENT_NAME}
+#SBATCH --job-name=ccgan-training-1-no-dist
 #SBATCH --account=project_2010169
 #SBATCH --output="{EXPERIMENT_NAME}.out"
 #SBATCH --error="{EXPERIMENT_NAME}.err"
@@ -12,6 +11,8 @@ EXPERIMENT_NAME="1-no-dist"
 #SBATCH --mem-per-cpu=8000
 #SBATCH --gres=gpu:v100:1
 
+EXPERIMENT_NAME="1-no-dist"
+echo "Entering experiment ${EXPERIMENT_NAME}..."
 
 if [ ! -d ".venv" ]; then
     echo "Creating virtual environment..."

@@ -12,14 +12,9 @@ EXPERIMENT_NAME="1-no-dist"
 #SBATCH --mem-per-cpu=16000
 #SBATCH --gres=gpu:v100:1
 
-# Create a virtual environment for the project if it doesn't exist
-if [ ! -d ".venv" ]; then
-    bash create-venv.sh
-    echo "Creating virtual environment..."
-else
-    echo "Virtual environment already exists. Activating it."
-fi
-source .venv/bin/activate
+# Load custom module
+module load pytorch/2.2
+export PYTHONUSERBASE=ccgan-userbase
 
 # Define name of the experiment
 # Experiment name

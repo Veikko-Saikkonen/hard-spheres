@@ -12,7 +12,6 @@ import torch
 import json
 from pathlib import Path
 from copy import deepcopy
-import hypergrad
 import logging
 import adabound  # https://github.com/Luolc/AdaBound
 from datetime import datetime
@@ -173,14 +172,11 @@ def build_optimizer_fn_from_config(optimizer_config):
         "name"
     )  # Remove name from config as the base constructors will not allow it
     try:
-        optimizer_class = getattr(hypergrad, name)
+        optimizer_class = getattr(adabound, name)
     except AttributeError:
-        try:
-            optimizer_class = getattr(adabound, name)
-        except AttributeError:
-            optimizer_class = getattr(
-                torch.optim,
-                name,
+        optimizer_class = getattr(
+            torch.optim,
+            name,
             )
 
     def optimizer_init(*args, **kwargs):

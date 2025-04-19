@@ -5,11 +5,9 @@ from pathlib import Path
 
 from copy import deepcopy
 
-import hypergrad
 import adabound
 import torch
 
-from src.adopt import adopt
 
 import mlflow
 
@@ -64,24 +62,15 @@ def build_optimizer_fn_from_config(optimizer_config):
         "name"
     )  # Remove name from config as the base constructors will not allow it
     try:
-        optimizer_class = getattr(hypergrad, name)
+        optimizer_class = getattr(adabound, name)
     except AttributeError:
         try:
-            optimizer_class = getattr(adabound, name)
-        except AttributeError:
-            try:
-                optimizer_class = getattr(
-                    torch.optim,
-                    name,
-                )
-            except AttributeError:
-                try:
-                    optimizer_class = getattr(
-                        adopt,
-                        name,
-                    )
-                except:
-                    raise AttributeError(f"Optimizer {name} not found")
+            optimizer_class = getattr(
+                torch.optim,
+                name,
+            )
+        except:
+            raise AttributeError(f"Optimizer {name} not found")
 
     def optimizer_init(*args, **kwargs):
         return optimizer_class(*args, **kwargs, **optimizer_config)
@@ -118,6 +107,7 @@ def load_raw_data(path="data", phi=[0.72], subpath=""):
         raise ValueError("Phi values must be unique")
 
     path = Path(path)
+    print(f"Loading data from {path.resolve()}")
     search_paths = []
     for p in phi:
         search_paths.append(path / f"phi-{p:.2f}" / subpath)

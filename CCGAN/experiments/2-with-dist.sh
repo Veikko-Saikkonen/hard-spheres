@@ -7,6 +7,11 @@
 #SBATCH --cpus-per-task=2
 #SBATCH --mem-per-cpu=16000
 #SBATCH --gres=gpu:v100:1
+
+# Create a virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
+
 module load pytorch/2.2
 
 # Install dependencies

@@ -208,13 +208,6 @@ class BatchDistance(Dataset):
         
         return coords_with_dis
 
-    
-
-import torch
-from torch.utils.data import Dataset
-from pytorch3d.ops import knn_points
-from your_module import apply_pbc_3x3_2d  # import the 2D PBC helper
-
 class BatchDistance2D(Dataset):
     """
     A Dataset wrapper that appends bond distances to each atom’s fractional coords,

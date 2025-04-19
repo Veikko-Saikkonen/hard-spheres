@@ -9,7 +9,7 @@ EXPERIMENT_NAME="2-with-dist"
 #SBATCH --time=12:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
-#SBATCH --mem-per-cpu=16000
+#SBATCH --mem-per-cpu=8000
 #SBATCH --gres=gpu:v100:1
 
 if [ ! -d ".venv" ]; then

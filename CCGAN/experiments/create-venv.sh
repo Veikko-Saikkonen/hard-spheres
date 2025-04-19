@@ -3,7 +3,7 @@
 #SBATCH --output=ccgan-create-venv.out
 #SBATCH --error=ccgan-create-venv.err
 #SBATCH --account=project_2010169
-#SBATCH --partition=cpu
+#SBATCH --partition=small
 #SBATCH --time=00:15:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1

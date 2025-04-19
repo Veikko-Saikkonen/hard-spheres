@@ -300,7 +300,7 @@ def main():
 
             # Print devices
 
-            gradient_penalty_D = calc_gradient_penalty(coord_disc, real_coords, real_labels, fake_coords, cuda)
+            gradient_penalty_D = calc_gradient_penalty(coord_disc, real_coords, real_labels, fake_coords, cuda, mps)
             
             D_cost = D_fake - D_real + gradient_penalty_D
             D_cost.backward()

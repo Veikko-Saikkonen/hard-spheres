@@ -328,6 +328,8 @@ def main():
             elif mps:
                 z = z.to(device='mps')
             ## Feed fake coordinates into Coordinate Discriminator
+            print("Labels shape is ", real_labels.shape)
+            print("noise shape is ", z.shape)
             fake_coords = generator(z, real_labels)   # size is (current_batch_size, 1, n_atoms_total, 3)
             fake_feature, D_fake = coord_disc(fake_coords.detach(), real_labels.detach())  # fake feature has size (current_batch_size, 200), D_fake has size (current_batch_size, 10)
             D_fake = D_fake.mean()
@@ -377,7 +379,7 @@ def main():
                     z = z.cuda()
                 elif mps:
                     z = z.to(device='mps')
-                fake_coords = generator(z)   # size is (current_batch_size, 1, n_atoms_total, 3)
+                fake_coords = generator(z, real_labels)   # size is (current_batch_size, 1, n_atoms_total, 3)
                 ## Feed fake coordinates into Coordinate Discriminator
                 fake_feature_G, D_fake_G = coord_disc(fake_coords, real_labels)
                 D_fake_G = D_fake_G.mean()

@@ -8,28 +8,37 @@
 #SBATCH --mem-per-cpu=16000
 #SBATCH --gres=gpu:v100:1
 module load pytorch
-cd ../ # Change to the directory where the script is located
+
+# Install dependencies
+pip install -r requirements.txt
 
 # Define name of the experiment
 # Experiment name
 EXPERIMENT_NAME="2-with-dist"
 RESULTS_DIR="results/${EXPERIMENT_NAME}"
 
+# If directory already exists, remove it
+if [ -d "${RESULTS_DIR}" ]; then
+    echo "Directory ${RESULTS_DIR} already exists. Removing it."
+    rm -rf "${RESULTS_DIR}"
+fi
+
 mkdir -p "${RESULTS_DIR}"
 
-python3 train.py\\
-        --training_data ../data/processed/samples\\
-        --gen_int 5\\
-        --gsave_freq 20\\
-        --n_save 20\\
-        --print_freq 5\\
-        --msave_freq 50\\
-        --msave_dir "${RESULTS_DIR}"\\
-        --gsave_dir "${RESULTS_DIR}"\\
-        --gen_channels_1 256\\
-        --latent_dim 128\\
-        --gen_label_dim 32\\
-        --disc_label_dim 32\\
-        --weight_dist 0.05
+
+python3 train.py\
+        --training_data ../data/processed/samples\
+        --gen_int 5\
+        --gsave_freq 20\
+        --n_save 20\
+        --print_freq 5\
+        --msave_freq 50\
+        --msave_dir "${RESULTS_DIR}"\
+        --gsave_dir "${RESULTS_DIR}"\
+        --gen_channels_1 256\
+        --latent_dim 128\
+        --gen_label_dim 32\
+        --disc_label_dim 32\
+        --weight_dist 0.05\
 
 

@@ -1,13 +1,2 @@
-torch==2.2.0
-torchvision==0.17.0
 git+https://github.com/facebookresearch/pytorch3d.git@stable
 ase==3.24.0
-numpy==1.26.4
-pandas
-seaborn
-scikit-learn
-scipy
-matplotlib
-tqdm
-adabound
-torchinfo

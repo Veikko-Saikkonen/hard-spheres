@@ -176,3 +176,4 @@ results
 
 # Ignore slurm output files from the cluster
 *.out
+*.err

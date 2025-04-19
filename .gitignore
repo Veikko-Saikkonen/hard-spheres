@@ -175,4 +175,4 @@ results
 
 
 # Ignore slurm output files from the cluster
-slurm-*.out
+*.out

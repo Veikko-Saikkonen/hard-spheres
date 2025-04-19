@@ -11,12 +11,13 @@
 
 # Create a virtual environment for the project if it doesn't exist
 echo "Creating virtual environment..."
+module load pytorch/2.2
 python3 -m venv .venv
+source .venv/bin/activate
 pip install --upgrade pip
 pip install --upgrade setuptools
 pip install --upgrade wheel
-source .venv/bin/activate
-module load pytorch/2.2
 
 # Make sure required modules are loaded
 pip install -r requirements.txt
+pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"

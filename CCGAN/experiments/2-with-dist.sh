@@ -47,8 +47,8 @@ python3 train.py\
         --gsave_dir "${RESULTS_DIR}/"\
         --gen_channels_1 256\
         --latent_dim 256\
-        --gen_label_dim 256\
-        --disc_label_dim 256\
+        --gen_label_dim 128\
+        --disc_label_dim 128\
         --weight_dist 0.10\
         --g_lr 0.0005\
         --coord_lr 0.0005\

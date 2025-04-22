@@ -11,7 +11,7 @@
 #SBATCH --mem-per-cpu=8000
 #SBATCH --gres=gpu:v100:1
 
-EXPERIMENT_NAME="2-with-dist-high-weight"
+EXPERIMENT_NAME="3-with-dist-high-weight"
 echo "Entering experiment ${EXPERIMENT_NAME}..."
 
 if [ ! -d ".venv" ]; then

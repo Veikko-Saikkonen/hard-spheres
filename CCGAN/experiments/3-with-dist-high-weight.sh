@@ -5,7 +5,7 @@
 #SBATCH --output=2-with-dist.out
 #SBATCH --error=2-with-dist.err
 #SBATCH --partition=gpu
-#SBATCH --time=12:00:00
+#SBATCH --time=08:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --mem-per-cpu=8000

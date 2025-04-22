@@ -11,7 +11,7 @@
 #SBATCH --mem-per-cpu=8000
 #SBATCH --gres=gpu:v100:1
 
-EXPERIMENT_NAME="2-with-dist"
+EXPERIMENT_NAME="2-with-dist-high-weight"
 echo "Entering experiment ${EXPERIMENT_NAME}..."
 
 if [ ! -d ".venv" ]; then
@@ -49,9 +49,9 @@ python3 train.py\
         --latent_dim 256\
         --gen_label_dim 128\
         --disc_label_dim 128\
-        --weight_dist 0.10\
+        --weight_dist 0.2\
         --g_lr 0.0005\
         --coord_lr 0.0005\
         --dist_lr 0.0005\
-        --step_size 10\
-        --gamma 0.9\
+        --step_size 50\
+        --gamma 0.90\

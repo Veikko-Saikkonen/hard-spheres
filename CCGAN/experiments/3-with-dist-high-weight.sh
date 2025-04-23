@@ -1,9 +1,9 @@
 #!/bin/bash -l
 # Job name and output files
-#SBATCH --job-name=ccgan-training-2-with-dist
+#SBATCH --job-name=ccgan-training-3-with-dist-high-weight
 #SBATCH --account=project_2010169
-#SBATCH --output=2-with-dist.out
-#SBATCH --error=2-with-dist.err
+#SBATCH --output=3-with-dist-high-weight.out
+#SBATCH --error=3-with-dist-high-weight.err
 #SBATCH --partition=gpu
 #SBATCH --time=08:00:00
 #SBATCH --ntasks=1

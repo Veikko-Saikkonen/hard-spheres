@@ -51,8 +51,8 @@ python3 train.py\
         --gen_label_dim 128\
         --disc_label_dim 128\
         --weight_dist 0.2\
-        --g_lr 0.001\
-        --coord_lr 0.001\
-        --dist_lr 0.001\
+        --g_lr 0.0001\
+        --coord_lr 0.0001\
+        --dist_lr 0.0001\
         --step_size 50\
         --gamma 0.90\

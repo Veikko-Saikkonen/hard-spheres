@@ -43,7 +43,7 @@ python3 train.py\
         --n_save 20\
         --print_freq 5\
         --msave_freq 50\
-        --batch_size 256\
+        --batch_size 128\
         --msave_dir "${RESULTS_DIR}/"\
         --gsave_dir "${RESULTS_DIR}/"\
         --gen_channels_1 256\
@@ -51,8 +51,8 @@ python3 train.py\
         --gen_label_dim 128\
         --disc_label_dim 128\
         --weight_dist 0.2\
-        --g_lr 0.000005\
-        --coord_lr 0.000005\
-        --dist_lr 0.000005\
+        --g_lr 0.00005\
+        --coord_lr 0.00005\
+        --dist_lr 0.00005\
         --step_size 50\
         --gamma 0.90\

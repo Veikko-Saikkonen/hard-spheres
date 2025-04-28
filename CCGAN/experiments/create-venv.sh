@@ -13,7 +13,7 @@
 # Create a virtual environment for the project if it doesn't exist
 module load pytorch/2.2
 echo "Creating virtual environment..."
-python3 -m venv --system-site-packages .venv
+python3.9 -m venv --system-site-packages .venv
 source .venv/bin/activate
 echo "Updating pip, setuptools, and wheel..."
 pip install --upgrade pip
@@ -23,5 +23,13 @@ echo "Installing requirements..."
 # Make sure required modules are loaded
 pip install -r requirements.txt
 # Install pytorch3d
-pip install --no-index --no-cache-dir pytorch3d -f https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/py39_cu113_pyt1110/download.html
+# If operating system is Linux, use the following command
+if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    pip install --no-index --no-cache-dir pytorch3d -f https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/py39_cu113_pyt1110/download.html
+fi
+# If operating system is MacOS, use the following command
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    MACOSX_DEPLOYMENT_TARGET=10.14 CC=clang CXX=clang++ pip install "git+https://github.com/facebookresearch/pytorch3d.git"
+fi
+
 echo "Virtual environment created and requirements installed."

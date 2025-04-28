@@ -1,9 +1,9 @@
 #!/bin/bash -l
 # Job name and output files
-#SBATCH --job-name=ccgan-training-3-with-dist-high-weight-more-data
+#SBATCH --job-name=ccgan-training-3-1-with-dist-high-weight
 #SBATCH --account=project_2010169
-#SBATCH --output=3-with-dist-high-weight-more-data.out
-#SBATCH --error=3-with-dist-high-weight-more-data.err
+#SBATCH --output=3-1-with-dist-high-weight.out
+#SBATCH --error=3-1-with-dist-high-weight.err
 #SBATCH --partition=gpu
 #SBATCH --time=12:00:00
 #SBATCH --ntasks=1
@@ -11,7 +11,7 @@
 #SBATCH --mem-per-cpu=8000
 #SBATCH --gres=gpu:v100:1
 
-EXPERIMENT_NAME="3-with-dist-high-weight-more-data"
+EXPERIMENT_NAME="3-1-with-dist-high-weight"
 echo "Entering experiment ${EXPERIMENT_NAME}..."
 
 if [ ! -d ".venv" ]; then

@@ -53,5 +53,5 @@ python3 train.py\
         --g_lr 0.0005\
         --coord_lr 0.0005\
         --dist_lr 0.0005\
-        --step_size 50\
+        --step_size 25\
         --gamma 0.90\

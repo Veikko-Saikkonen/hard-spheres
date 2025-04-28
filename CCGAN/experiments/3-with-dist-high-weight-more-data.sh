@@ -5,7 +5,7 @@
 #SBATCH --output=3-with-dist-high-weight-more-data.out
 #SBATCH --error=3-with-dist-high-weight-more-data.err
 #SBATCH --partition=gpu
-#SBATCH --time=08:00:00
+#SBATCH --time=12:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --mem-per-cpu=8000

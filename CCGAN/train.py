@@ -166,8 +166,11 @@ def main():
     _, idx, n_atoms_elements = np.unique(ase_atoms[0].numbers, return_index=True, return_counts=True)
     n_atoms_elements = n_atoms_elements[np.argsort(idx)]   # Array of number of atoms per element in each structure
     train_coords_all = []   # Stores the fractional coordinates of all structures in ase_atoms
+    train_lattices_all = []   # Stores the lattice vectors of all structures in ase_atoms
     for i in range(len(ase_atoms)):
-        train_coords_all.append(ase_atoms[i].get_scaled_positions())
+        # train_coords_all.append(ase_atoms[i].get_scaled_positions())
+        train_coords_all.append(ase_atoms[i].get_positions()) # NOTE: Make sure to scale your training data to the range of [0,1] before training
+        train_lattices_all.append(ase_atoms[i].get_cell()[:]) # NOTE: Make sure your cells are in the same scale
     train_coords_all = torch.FloatTensor(np.array(train_coords_all))
     # Append bond distances to the coordinates
     print("Appending bond distances...")
@@ -180,6 +183,9 @@ def main():
         elif mps:
             batch_coords = batch_coords.to(device='mps')
             
+        torch.save(batch_coords, 'batch_coords.pt')
+        print(lattice)
+        exit()
         batch_dataset = BatchDistance2D(batch_coords, n_neighbors=args.n_neighbors, lat_matrix=lattice)
         batch_coords_with_dist = batch_dataset.append_dist()
         train_data.append(batch_coords_with_dist.cpu())

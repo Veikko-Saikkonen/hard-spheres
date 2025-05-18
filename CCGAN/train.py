@@ -190,7 +190,7 @@ def main():
     for i, (batch_coords, batch_lattices) in enumerate(prep_dataloader):
         batch_coords = batch_coords.view(batch_coords.shape[0], 1, n_atoms_total, 3).float()
         lattices = batch_lattices
-        # NOTE: May have to scale batch_coords back to the original scale to calculate bond distances
+        
         if cuda:
             batch_coords = batch_coords.cuda()
         elif mps:

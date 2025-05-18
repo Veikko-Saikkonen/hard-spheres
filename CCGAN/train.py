@@ -161,7 +161,6 @@ def main():
                     ase_atoms.extend(read(file_path, index=':', format='extxyz'))
     else:
         ase_atoms = read(args.training_data, index=':', format='extxyz')
-    lattice = ase_atoms[0].get_cell()[:]   # Lattice vectors, array of shape (3,3)
     n_atoms_total = len(ase_atoms[0])   # Total number of atoms in each structure
     _, idx, n_atoms_elements = np.unique(ase_atoms[0].numbers, return_index=True, return_counts=True)
     n_atoms_elements = n_atoms_elements[np.argsort(idx)]   # Array of number of atoms per element in each structure
@@ -178,14 +177,12 @@ def main():
     train_data = []   # Stores the fractional coordinates and bond distances of all structures
     for i, batch_coords in enumerate(prep_dataloader):
         batch_coords = batch_coords.view(batch_coords.shape[0], 1, n_atoms_total, 3).float()
+        lattice = train_lattices_all[i].reshape(1,3,3).float()
         if cuda:
             batch_coords = batch_coords.cuda()
         elif mps:
             batch_coords = batch_coords.to(device='mps')
             
-        torch.save(batch_coords, 'batch_coords.pt')
-        print(lattice)
-        exit()
         batch_dataset = BatchDistance2D(batch_coords, n_neighbors=args.n_neighbors, lat_matrix=lattice)
         batch_coords_with_dist = batch_dataset.append_dist()
         train_data.append(batch_coords_with_dist.cpu())

@@ -164,14 +164,29 @@ def main():
     n_atoms_elements = n_atoms_elements[np.argsort(idx)]   # Array of number of atoms per element in each structure        
     train_coords_all = []   # Stores the fractional coordinates of all structures in ase_atoms
     for i in range(len(ase_atoms)):
-        # train_coords_all.append(ase_atoms[i].get_scaled_positions())
-        train_coords_all.append(ase_atoms[i].get_positions())
+        train_coords_all.append(ase_atoms[i].get_scaled_positions())
     train_coords_all = torch.FloatTensor(np.array(train_coords_all))
     train_coords_all = train_coords_all.unsqueeze(1)
 
+    # Get the labels (only phi and L for now)
+    def get_labels(ase_atoms):
+        labels = []
+        
+        for i in range(len(ase_atoms)):
+            sample_label = []
+            sample_label.append(ase_atoms[i].info["phi"])
+            sample_label.append(ase_atoms[i].info["L"])
+            sample_label = np.array(sample_label)
+            labels.append(sample_label)
+
+        return np.array(labels)
+    
     # Get the labels (only phi for now)
-    train_labels = np.array([ase_atoms[i].info["phi"] for i in range(len(ase_atoms))])
-    train_labels = torch.FloatTensor(train_labels).unsqueeze(1)
+    train_labels = get_labels(ase_atoms)
+        
+    train_labels = torch.FloatTensor(train_labels)
+
+    print("Training labels shape is ", train_labels.shape)
 
     # Create custom dataset that includes the labels
     class CustomDataset(torch.utils.data.Dataset):

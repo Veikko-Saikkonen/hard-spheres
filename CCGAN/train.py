@@ -167,8 +167,7 @@ def main():
     train_coords_all = []   # Stores the fractional coordinates of all structures in ase_atoms
     train_lattices_all = []   # Stores the lattice vectors of all structures in ase_atoms
     for i in range(len(ase_atoms)):
-        # train_coords_all.append(ase_atoms[i].get_scaled_positions())
-        train_coords_all.append(ase_atoms[i].get_positions()) # NOTE: Make sure to scale your training data to the range of [0,1] before training
+        train_coords_all.append(ase_atoms[i].get_scaled_positions()) # NOTE: Make sure to scale your training data to the range of [0,1] before training
         train_lattices_all.append(ase_atoms[i].get_cell()[:]) # NOTE: Make sure your cells are in the same scale
     train_coords_all = torch.FloatTensor(np.array(train_coords_all))
     # Append bond distances to the coordinates
@@ -178,6 +177,7 @@ def main():
     for i, batch_coords in enumerate(prep_dataloader):
         batch_coords = batch_coords.view(batch_coords.shape[0], 1, n_atoms_total, 3).float()
         lattice = train_lattices_all[i]
+        # NOTE: May have to scale batch_coords back to the original scale to calculate bond distances
         if cuda:
             batch_coords = batch_coords.cuda()
         elif mps:
@@ -190,10 +190,28 @@ def main():
     torch.save(train_data, 'train_data.pt')
     print("Training data shape is ", train_data.shape)
     # Remove unneeded objects to free up memory
+
+    def get_labels(ase_atoms):
+        labels = []
+        
+        for i in range(len(ase_atoms)):
+            sample_label = []
+            sample_label.append(ase_atoms[i].info["phi"])
+            sample_label.append(ase_atoms[i].info["L"])
+            sample_label = np.array(sample_label)
+            labels.append(sample_label)
+
+        return np.array(labels)
     
     # Get the labels (only phi for now)
-    train_labels = np.array([ase_atoms[i].info["phi"] for i in range(len(ase_atoms))])
-    train_labels = torch.FloatTensor(train_labels).unsqueeze(1)
+    train_labels = get_labels(ase_atoms)
+    train_labels = torch.FloatTensor(train_labels)
+
+    if len(train_labels.shape) == 1:
+        train_labels = train_labels.unsqueeze(1)
+
+    print("Training labels shape is ", train_labels.shape)
+        
 
     # Create custom dataset that includes the labels
     class CustomDataset(torch.utils.data.Dataset):

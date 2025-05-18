@@ -3,6 +3,7 @@ from models import Generator
 from ase.io import read, write
 import argparse
 from tqdm import tqdm
+from pathlib import Path
 
 def main():
     parser = argparse.ArgumentParser()
@@ -14,18 +15,26 @@ def main():
     parser.add_argument('--write_fname', type=str, default='gen', help='filename to write generated structures (.extxyz file)')
     parser.add_argument('--n_labels', type=int, help='conditioning label dimension')
     parser.add_argument('--gen_label_dim', type=int, default=64, help='conditioning label latent dimension for generator')
-    parser.add_argument('--label_phis', type=float, default=0.84, help='phi value for the generator')
     
 
     args = parser.parse_args()
 
-    args.write_fname = args.write_fname + "-phi-" + str(args.label_phis) + ".extxyz"
-
     struc_template = read(args.ref_struc, index=0, format='extxyz')  
     n_atoms_total = len(struc_template)
     
+    ref_phi = struc_template[0].info['phi']
+    ref_L = struc_template[0].info['L']
+
+    ref_label = torch.array([ref_phi, ref_L]).unsqueeze(0)
+
+
+    Path(args.write_fname).mkdir(parents=True, exist_ok=True)
+
+    args.write_fname = args.write_fname + "phi-" + str(ref_phi) + ".extxyz"
+
+    
     # Load generator
-    generator = Generator(args, n_atoms_total, n_label_features=1, label_dim=args.gen_label_dim)
+    generator = Generator(args, n_atoms_total, n_label_features=ref_label.shape[1], label_dim=args.gen_label_dim)
     print("Loading generator...")
     if torch.cuda.is_available():
         generator.load_state_dict(torch.load(args.load_generator, weights_only=False, map_location=torch.device("cpu") if not torch.cuda.is_available() else None))
@@ -36,12 +45,9 @@ def main():
     print("=> Loaded '{}'.".format(args.load_generator))
     generator.eval()
 
-    conditioned_labels = torch.zeros(args.n_struc, args.n_labels)
-    conditioned_labels[:, 0] = args.label_phis
-    
     # Generate fake coordinates
     z = torch.randn(args.n_struc, args.latent_dim)
-    fake_coords = generator(z, conditioned_labels).detach()
+    fake_coords = generator(z, ref_label).detach()
 
     # Save structures by replacing the coordinates of the structure template with the generated coordinates
     fake_struc_all = []

@@ -37,7 +37,7 @@ def main():
     generator = Generator(args, n_atoms_total, n_label_features=ref_label.shape[1], label_dim=args.gen_label_dim)
     print("Loading generator...")
     if torch.cuda.is_available():
-        generator.load_state_dict(torch.load(args.load_generator, weights_only=False, map_location=torch.device("cpu") if not torch.cuda.is_available() else None))
+        generator.load_state_dict(torch.load(args.load_generator, weights_only=False, map_location=torch.device("cuda")))
     elif torch.backends.mps.is_available():
         generator.load_state_dict(torch.load(args.load_generator, weights_only=False, map_location=torch.device("mps")))
     else:

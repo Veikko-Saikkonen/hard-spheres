@@ -186,7 +186,7 @@ def main():
     # Append bond distances to the coordinates
     print("Appending bond distances...")
     prep_dataset = PrepDataloader(train_coords_all, train_lattices_all)
-    dataloader = torch.utils.data.DataLoader(prep_dataset, batch_size = 256, shuffle = False)
+    prep_dataloader = torch.utils.data.DataLoader(prep_dataset, batch_size = 256, shuffle = False)
     train_data = []   # Stores the fractional coordinates and bond distances of all structures
     for i, (batch_coords, batch_lattices) in enumerate(prep_dataloader):
         batch_coords = batch_coords.view(batch_coords.shape[0], 1, n_atoms_total, 3).float()

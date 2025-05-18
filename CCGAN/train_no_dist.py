@@ -164,7 +164,8 @@ def main():
     n_atoms_elements = n_atoms_elements[np.argsort(idx)]   # Array of number of atoms per element in each structure        
     train_coords_all = []   # Stores the fractional coordinates of all structures in ase_atoms
     for i in range(len(ase_atoms)):
-        train_coords_all.append(ase_atoms[i].get_scaled_positions())
+        # train_coords_all.append(ase_atoms[i].get_scaled_positions())
+        train_coords_all.append(ase_atoms[i].get_positions())
     train_coords_all = torch.FloatTensor(np.array(train_coords_all))
     train_coords_all = train_coords_all.unsqueeze(1)
 

@@ -205,6 +205,9 @@ def main():
     del ase_atoms
     print("=> Training data prepared.")
 
+    torch.save(train_coords_all, 'train_coords_all.pt')
+    print("Training data shape is ", train_coords_all.shape)
+
 	## Configure data loader
     dataloader = torch.utils.data.DataLoader(dataset, batch_size = args.batch_size, shuffle = True)
     print("=> Data loader configured.")
@@ -372,15 +375,17 @@ def main():
                     mem_res=torch.cuda.max_memory_reserved()/2**30)
                 )
 
-            ## Store the fake coordinates that were generated. Only saves up to "n_save" fake structures. 
+            ## Store the fake coordinates that were generated (with the real labels). Only saves up to "n_save" fake structures. 
             n_save = args.n_save   # Maximum number of fake structures to save
             if i == 0:
                 gen_coords = fake_coords.detach().clone()[:n_save]
+                gen_labels = real_labels.detach().clone()[:n_save]
             else:
                 n_current = len(gen_coords)   # Current number of fake structures saved
                 if n_current < n_save:
                     n_need = n_save - n_current   # Number of fake structures needed
                     gen_coords = torch.cat((gen_coords, fake_coords.detach().clone()[:n_need]), dim = 0)
+                    gen_labels = torch.cat((gen_labels, real_labels.detach().clone()[:n_need]), dim = 0)
             
             ## ---------------------- END OF BATCHES -----------------------------
         
@@ -421,6 +426,10 @@ def main():
             gen_name = args.gsave_dir+'gen_coords_'+str(epoch)
             gen_file = gen_coords.cpu().numpy()
             np.save(gen_name, gen_file)
+
+            gen_labels_name = args.gsave_dir+'gen_labels_'+str(epoch)
+            gen_labels_file = gen_labels.cpu().numpy()
+            np.save(gen_labels_name, gen_labels_file)
         
         ## Write losses and learning rate files
         with open(args.msave_dir+"losses.csv", "a", newline='') as csvfile: 

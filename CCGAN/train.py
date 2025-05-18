@@ -183,6 +183,7 @@ def main():
         elif mps:
             batch_coords = batch_coords.to(device='mps')
             
+        torch.save(batch_coords, 'batch_coords.pt')
         batch_dataset = BatchDistance2D(batch_coords, n_neighbors=args.n_neighbors, lat_matrix=lattice)
         batch_coords_with_dist = batch_dataset.append_dist()
         train_data.append(batch_coords_with_dist.cpu())
@@ -436,16 +437,18 @@ def main():
                     mem_res=torch.cuda.max_memory_reserved()/2**30)
                     )
 
-            ## Store the fake coordinates that were generated. Only saves up to "n_save" fake structures. 
+            ## Store the fake coordinates that were generated (with the real labels). Only saves up to "n_save" fake structures. 
             n_save = args.n_save   # Maximum number of fake structures to save
             if i == 0:
                 gen_coords = fake_coords.detach().clone()[:n_save]
+                gen_labels = real_labels.detach().clone()[:n_save]
             else:
                 n_current = len(gen_coords)   # Current number of fake structures saved
                 if n_current < n_save:
                     n_need = n_save - n_current   # Number of fake structures needed
                     gen_coords = torch.cat((gen_coords, fake_coords.detach().clone()[:n_need]), dim = 0)
-            
+                    gen_labels = torch.cat((gen_labels, real_labels.detach().clone()[:n_need]), dim = 0)
+
             ## ---------------------- END OF BATCHES -----------------------------
         
         ## Check if current Wasserstein distance is less than best distance
@@ -490,6 +493,10 @@ def main():
             gen_name = args.gsave_dir+'gen_coords_'+str(epoch)
             gen_file = gen_coords.cpu().numpy()
             np.save(gen_name, gen_file)
+
+            gen_labels_name = args.gsave_dir+'gen_labels_'+str(epoch)
+            gen_labels_file = gen_labels.cpu().numpy()
+            np.save(gen_labels_name, gen_labels_file)
         
         ## Write losses and learning rate files
         with open(args.msave_dir+"losses.csv", "a", newline='') as csvfile: 

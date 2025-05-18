@@ -228,16 +228,19 @@ def main():
 
     # Create custom dataset that includes the labels
     class CustomDataset(torch.utils.data.Dataset):
-        def __init__(self, data, labels):
+        def __init__(self, data, labels, lattices):
             self.data = data
             self.labels = labels
+            self.lattices = lattices
 
         def __len__(self):
             return len(self.data)
 
         def __getitem__(self, idx):
-            return self.data[idx], self.labels[idx]
-    dataset = CustomDataset(train_data, train_labels)
+            return self.data[idx], self.labels[idx], self.lattices[idx]
+    
+    # Create the dataset
+    dataset = CustomDataset(train_data, train_labels, train_lattices_all)
     
     
     del ase_atoms, train_coords_all, prep_dataloader, batch_coords, batch_dataset, batch_coords_with_dist
@@ -331,12 +334,15 @@ def main():
         batch_time = AverageMeter()  # Stores the time for batch to complete
         end = time.time()   # time stamp
         
-        for i, (real_coords_with_dis, real_labels) in enumerate(dataloader):
+        for i, (real_coords_with_dis, real_labels, lattices) in enumerate(dataloader):
             for p in coord_disc.parameters():
                 p.requires_grad = True
             for p in dist_disc.parameters():
                 p.requires_grad = True
-            
+
+            phis = real_labels[...,0]
+            Ls = real_labels[...,1]
+
             ## Prepare tensor of real coordinates
             current_batch_size = real_labels.shape[0]
             if cuda:
@@ -371,7 +377,7 @@ def main():
             D_fake = D_fake.mean()
             ## Feed fake distances into Distance Discriminator
             end_fake = time.time()   # time stamp for fake structures
-            fake_dataset = BatchDistance2D(fake_coords, n_neighbors=args.n_neighbors, lat_matrix=lattice)
+            fake_dataset = BatchDistance2D(fake_coords, n_neighbors=args.n_neighbors, lat_matrix=lattices)
             fake_distances = fake_dataset.append_dist()[:,:,:,3:]
             data_time_fake.update(time.time() - end_fake)   # measure data prep time
             fake_dist_feature, D_dist_fake = dist_disc(fake_distances.detach(), real_labels.detach())

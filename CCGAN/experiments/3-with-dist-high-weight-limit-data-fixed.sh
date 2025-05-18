@@ -39,10 +39,10 @@ mkdir -p "${RESULTS_DIR}"
 python3 train.py\
         --training_data ../data/processed/samples\
         --gen_int 5\
-        --gsave_freq 20\
+        --gsave_freq 10\
         --n_save 20\
         --print_freq 5\
-        --msave_freq 50\
+        --msave_freq 30\
         --msave_dir "${RESULTS_DIR}/"\
         --gsave_dir "${RESULTS_DIR}/"\
         --gen_channels_1 256\

@@ -178,6 +178,7 @@ def main():
     for i, batch_coords in enumerate(prep_dataloader):
         batch_coords = batch_coords.view(batch_coords.shape[0], 1, n_atoms_total, 3).float()
         lattice = train_lattices_all[i].reshape(1,3,3).float()
+        lattice = train_lattices_all[i]
         if cuda:
             batch_coords = batch_coords.cuda()
         elif mps:

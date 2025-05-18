@@ -426,7 +426,7 @@ def main():
                 fake_feature_G, D_fake_G = coord_disc(fake_coords, real_labels)
                 D_fake_G = D_fake_G.mean()
                 ## Feed fake distances into Distance Discriminator
-                fake_dataset = BatchDistance2D(fake_coords, n_neighbors=args.n_neighbors, lat_matrix=lattice)
+                fake_dataset = BatchDistance2D(fake_coords, n_neighbors=args.n_neighbors, lat_matrix=lattices)
                 fake_distances = fake_dataset.append_dist()[:,:,:,3:]
                 fake_dist_feature_G, D_dist_fake_G = dist_disc(fake_distances, real_labels)
                 D_dist_fake_G = D_dist_fake_G.mean()       

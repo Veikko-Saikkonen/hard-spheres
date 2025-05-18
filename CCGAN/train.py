@@ -170,21 +170,33 @@ def main():
         train_coords_all.append(ase_atoms[i].get_scaled_positions()) # NOTE: Make sure to scale your training data to the range of [0,1] before training
         train_lattices_all.append(ase_atoms[i].get_cell()[:]) # NOTE: Make sure your cells are in the same scale
     train_coords_all = torch.FloatTensor(np.array(train_coords_all))
+    train_lattices_all = torch.FloatTensor(np.array(train_lattices_all))
+
+    class PrepDataloader(torch.utils.data.Dataset):
+        def __init__(self, coords, lattices):
+            self.coords = coords
+            self.lattices = lattices
+
+        def __len__(self):
+            return len(self.coords)
+
+        def __getitem__(self, idx):
+            return self.coords[idx], self.lattices[idx]
+
     # Append bond distances to the coordinates
     print("Appending bond distances...")
-    prep_dataloader = torch.utils.data.DataLoader(train_coords_all, batch_size = 256, shuffle = False)
+    prep_dataloader = PrepDataloader(train_coords_all, train_lattices_all, batch_size = 256, shuffle = False)
     train_data = []   # Stores the fractional coordinates and bond distances of all structures
-    for i, batch_coords in enumerate(prep_dataloader):
+    for i, (batch_coords, batch_lattices) in enumerate(prep_dataloader):
         batch_coords = batch_coords.view(batch_coords.shape[0], 1, n_atoms_total, 3).float()
-        lattice = train_lattices_all[i]
+        lattices = batch_lattices
         # NOTE: May have to scale batch_coords back to the original scale to calculate bond distances
         if cuda:
             batch_coords = batch_coords.cuda()
         elif mps:
             batch_coords = batch_coords.to(device='mps')
             
-        torch.save(batch_coords, 'batch_coords.pt')
-        batch_dataset = BatchDistance2D(batch_coords, n_neighbors=args.n_neighbors, lat_matrix=lattice)
+        batch_dataset = BatchDistance2D(batch_coords, n_neighbors=args.n_neighbors, lat_matrix=lattices)
         batch_coords_with_dist = batch_dataset.append_dist()
         train_data.append(batch_coords_with_dist.cpu())
     train_data = torch.cat(train_data)

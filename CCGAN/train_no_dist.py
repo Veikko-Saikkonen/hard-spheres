@@ -175,7 +175,7 @@ def main():
         for i in range(len(ase_atoms)):
             sample_label = []
             sample_label.append(ase_atoms[i].info["phi"])
-            # sample_label.append(ase_atoms[i].info["L"])
+            sample_label.append(ase_atoms[i].info["L"])
             sample_label = np.array(sample_label)
             labels.append(sample_label)
 

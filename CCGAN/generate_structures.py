@@ -22,10 +22,12 @@ def main():
     struc_template = read(args.ref_struc, index=0, format='extxyz')  
     n_atoms_total = len(struc_template)
     
-    ref_phi = struc_template[0].info['phi']
-    ref_L = struc_template[0].info['L']
+    ref_phi = struc_template.info['phi']
+    # ref_L = struc_template.info['L']
 
-    ref_label = torch.array([ref_phi, ref_L]).unsqueeze(0)
+    # ref_label = torch.tensor([ref_phi, ref_L],dtype=torch.float32).unsqueeze(0)
+    ref_label = torch.tensor([ref_phi],dtype=torch.float32).unsqueeze(0)
+    ref_label = ref_label.repeat(args.n_struc, 1)  # Repeat for the number of structures to generate
 
 
     Path(args.write_fname).mkdir(parents=True, exist_ok=True)

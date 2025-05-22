@@ -122,7 +122,7 @@ class DistanceDiscriminator(nn.Module):
         self.n_label_features = n_label_features
         
         self.model = nn.Sequential(
-            utils.spectral_norm(nn.Conv2d(in_channels = 1, out_channels = 512, kernel_size = (1,3), stride = 1, padding = 0)),
+            utils.spectral_norm(nn.Conv2d(in_channels = 1, out_channels = 512, kernel_size = (1,self.n_neighbors), stride = 1, padding = 0)),
             nn.LeakyReLU(0.2, inplace=True),
             utils.spectral_norm(nn.Conv2d(in_channels = 512, out_channels = 512, kernel_size = (1,1), stride = 1, padding = 0)),
             nn.LeakyReLU(0.2,inplace=True),

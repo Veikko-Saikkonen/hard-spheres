@@ -406,7 +406,7 @@ def main():
             
             
             ## Train Generator every "gen_int" batches with new noise z
-            if i % args.gen_int == 0 or epoch == 0: # Warm up generator for first epoch
+            if i % args.gen_int == 0: # Warm up generator for first epoch
                 for p in coord_disc.parameters():
                     p.requires_grad = False
                 for p in dist_disc.parameters():

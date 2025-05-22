@@ -55,11 +55,11 @@ class CoordinateDiscriminator(nn.Module):
         self.n_atoms_elements = n_atoms_elements
         
         self.model = nn.Sequential(
-            utils.spectral_norm(nn.Conv2d(in_channels = 1, out_channels = 512, kernel_size = (1,3), stride = 1, padding = 0)),
+            nn.Conv2d(in_channels = 1, out_channels = 512, kernel_size = (1,3), stride = 1, padding = 0),
             nn.LeakyReLU(0.2, inplace=True),
-            utils.spectral_norm(nn.Conv2d(in_channels = 512, out_channels = 512, kernel_size = (1,1), stride = 1, padding = 0)),
+            nn.Conv2d(in_channels = 512, out_channels = 512, kernel_size = (1,1), stride = 1, padding = 0),
             nn.LeakyReLU(0.2,inplace=True),
-            utils.spectral_norm(nn.Conv2d(in_channels = 512, out_channels = 256, kernel_size= (1,1), stride = 1, padding = 0)),
+            nn.Conv2d(in_channels = 512, out_channels = 256, kernel_size= (1,1), stride = 1, padding = 0),
             nn.LeakyReLU(0.2,inplace=True)
             )
         
@@ -72,18 +72,18 @@ class CoordinateDiscriminator(nn.Module):
 
         # Use a linear layer to project the label to the same dimension as the output
         self.label_proj = nn.Sequential(
-            utils.spectral_norm(nn.Linear(self.n_label_features, self.label_dim)),
+            nn.Linear(self.n_label_features, self.label_dim),
             nn.LeakyReLU(0.2, inplace=True),
         )
 
         self.feature_layer = nn.Sequential(
-            utils.spectral_norm(nn.Linear(256*self.n_elements + self.label_dim, 1000)),
+            nn.Linear(256*self.n_elements + self.label_dim, 1000),
             nn.LeakyReLU(0.2, inplace =True),
-            utils.spectral_norm(nn.Linear(1000,200)),
+            nn.Linear(1000,200),
             nn.LeakyReLU(0.2, inplace = True)
         )
         self.output = nn.Sequential(
-            utils.spectral_norm(nn.Linear(200,10))
+            nn.Linear(200,10)
             )
 
     def forward(self, x, labels):
@@ -122,11 +122,11 @@ class DistanceDiscriminator(nn.Module):
         self.n_label_features = n_label_features
         
         self.model = nn.Sequential(
-            utils.spectral_norm(nn.Conv2d(in_channels = 1, out_channels = 512, kernel_size = (1,self.n_neighbors), stride = 1, padding = 0)),
+            nn.Conv2d(in_channels = 1, out_channels = 512, kernel_size = (1,self.n_neighbors), stride = 1, padding = 0),
             nn.LeakyReLU(0.2, inplace=True),
-            utils.spectral_norm(nn.Conv2d(in_channels = 512, out_channels = 512, kernel_size = (1,1), stride = 1, padding = 0)),
+            nn.Conv2d(in_channels = 512, out_channels = 512, kernel_size = (1,1), stride = 1, padding = 0),
             nn.LeakyReLU(0.2,inplace=True),
-            utils.spectral_norm(nn.Conv2d(in_channels = 512, out_channels = 256, kernel_size= (1,1), stride = 1, padding = 0)),
+            nn.Conv2d(in_channels = 512, out_channels = 256, kernel_size= (1,1), stride = 1, padding = 0),
             nn.LeakyReLU(0.2,inplace=True)
             )
         
@@ -136,18 +136,18 @@ class DistanceDiscriminator(nn.Module):
 
         # Use a linear layer to project the label to the same dimension as the output
         self.label_proj = nn.Sequential(
-            utils.spectral_norm(nn.Linear(self.n_label_features, self.label_dim)),
+            nn.Linear(self.n_label_features, self.label_dim),
             nn.LeakyReLU(0.2, inplace=True),
         )
 
         self.feature_layer = nn.Sequential(
-            utils.spectral_norm(nn.Linear(256*self.n_elements + self.label_dim, 1000)),
+            nn.Linear(256*self.n_elements + self.label_dim, 1000),
             nn.LeakyReLU(0.2, inplace =True),
-            utils.spectral_norm(nn.Linear(1000,200)),
+            nn.Linear(1000,200),
             nn.LeakyReLU(0.2, inplace = True)
         )
         self.output = nn.Sequential(
-            utils.spectral_norm(nn.Linear(200,10))
+            nn.Linear(200,10)
             )
 
     def forward(self, x, labels):

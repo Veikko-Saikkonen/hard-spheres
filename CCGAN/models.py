@@ -14,10 +14,8 @@ class Generator(nn.Module):
         # self.label_embedding = nn.Embedding(n_label_features, self.label_dim)
 
         self.label_proj = nn.Sequential(
-            nn.BatchNorm1d(self.n_label_features), # NOTE: This may not be good for the label embedding
             nn.Linear(self.n_label_features, self.label_dim),
             nn.ReLU(True),
-            nn.BatchNorm1d(self.label_dim),
         )
         
 
@@ -68,10 +66,8 @@ class CoordinateDiscriminator(nn.Module):
 
         # Use a linear layer to project the label to the same dimension as the output
         self.label_proj = nn.Sequential(
-            nn.BatchNorm1d(self.n_label_features),
             nn.Linear(self.n_label_features, self.label_dim),
             nn.ReLU(True),
-            nn.BatchNorm1d(self.label_dim),
         )
 
         self.feature_layer = nn.Sequential(nn.Linear(256*self.n_elements + self.label_dim, 1000), nn.LeakyReLU(0.2, inplace =True), nn.Linear(1000,200),nn.LeakyReLU(0.2, inplace = True))
@@ -122,10 +118,8 @@ class DistanceDiscriminator(nn.Module):
 
         # Use a linear layer to project the label to the same dimension as the output
         self.label_proj = nn.Sequential(
-            nn.BatchNorm1d(self.n_label_features),
             nn.Linear(self.n_label_features, self.label_dim),
             nn.ReLU(True),
-            nn.BatchNorm1d(self.label_dim),
         )
 
 

@@ -211,7 +211,7 @@ def main():
         for i in range(len(ase_atoms)):
             sample_label = []
             sample_label.append(ase_atoms[i].info["phi"])
-            sample_label.append(ase_atoms[i].info["L"]) # NOTE: Not used for now, would have to be normalized
+            sample_label.append(ase_atoms[i].info["L"])
             sample_label = np.array(sample_label)
             labels.append(sample_label)
 
@@ -283,7 +283,7 @@ def main():
     if args.load_generator:
         print("Loading generator...")
         assert os.path.exists(args.load_generator), "Cannot find generator model to load!"
-        generator.load_state_dict(torch.load(args.load_generator))
+        generator.load_state_dict(torch.load(args.load_generator, weights_only=False))
         print("=> Loaded '{}'.".format(args.load_generator))
     else:
         generator.apply(weights_init)
@@ -292,7 +292,7 @@ def main():
     if args.load_coord_disc:
         print("Loading coordinate discriminator...")
         assert os.path.exists(args.load_coord_disc), "Cannot find coordinate discriminator model to load!"
-        coord_disc.load_state_dict(torch.load(args.load_coord_disc))
+        coord_disc.load_state_dict(torch.load(args.load_coord_disc, weights_only=False))
         print("=> Loaded '{}'.".format(args.load_coord_disc))
     else:
         coord_disc.apply(weights_init)
@@ -302,7 +302,7 @@ def main():
         print("Loading distance discriminator...")
         assert os.path.exists(args.load_dist_disc), "Cannot find distance discriminator model to load!"
         dist_disc.load_state_dict(torch.load(args.load_dist_disc))
-        print("=> Loaded '{}'.".format(args.load_dist_disc))
+        print("=> Loaded '{}'.".format(args.load_dist_disc, weights_only=False))
     else:
         dist_disc.apply(weights_init)
         print("Distance discriminator weights are initialized.")
@@ -311,7 +311,7 @@ def main():
     if args.load_checkpoint:
         print("Loading checkpoint...")
         assert os.path.exists(args.load_checkpoint), "Cannot find checkpoint to load!"
-        checkpoint = torch.load(args.load_checkpoint)
+        checkpoint = torch.load(args.load_checkpoint, weights_only=False)
         start_epoch = checkpoint['epoch']
         best_distance = checkpoint['best_distance']
         optimizer_G.load_state_dict(checkpoint['optimizer_G'])
@@ -406,7 +406,7 @@ def main():
             
             
             ## Train Generator every "gen_int" batches with new noise z
-            if i % args.gen_int == 0 :		
+            if i % args.gen_int == 0 or epoch == 0: # Warm up generator for first epoch
                 for p in coord_disc.parameters():
                     p.requires_grad = False
                 for p in dist_disc.parameters():

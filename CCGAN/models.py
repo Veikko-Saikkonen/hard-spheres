@@ -55,9 +55,12 @@ class CoordinateDiscriminator(nn.Module):
         self.n_atoms_elements = n_atoms_elements
         
         self.model = nn.Sequential(
-            utils.spectral_norm(nn.Conv2d(in_channels = 1, out_channels = 512, kernel_size = (1,3), stride = 1, padding = 0),nn.LeakyReLU(0.2, inplace=True)),
-            utils.spectral_norm(nn.Conv2d(in_channels = 512, out_channels = 512, kernel_size = (1,1), stride = 1, padding = 0),nn.LeakyReLU(0.2,inplace=True)),
-            utils.spectral_norm(nn.Conv2d(in_channels = 512, out_channels = 256, kernel_size= (1,1), stride = 1, padding = 0),nn.LeakyReLU(0.2,inplace=True))
+            utils.spectral_norm(nn.Conv2d(in_channels = 1, out_channels = 512, kernel_size = (1,3), stride = 1, padding = 0)),
+            nn.LeakyReLU(0.2, inplace=True),
+            utils.spectral_norm(nn.Conv2d(in_channels = 512, out_channels = 512, kernel_size = (1,1), stride = 1, padding = 0)),
+            nn.LeakyReLU(0.2,inplace=True),
+            utils.spectral_norm(nn.Conv2d(in_channels = 512, out_channels = 256, kernel_size= (1,1), stride = 1, padding = 0)),
+            nn.LeakyReLU(0.2,inplace=True)
             )
         
         self.avgpool_elements = []
@@ -74,7 +77,10 @@ class CoordinateDiscriminator(nn.Module):
         )
 
         self.feature_layer = nn.Sequential(
-            utils.spectral_norm(nn.Linear(256*self.n_elements + self.label_dim, 1000), nn.LeakyReLU(0.2, inplace =True), nn.Linear(1000,200),nn.LeakyReLU(0.2, inplace = True))
+            utils.spectral_norm(nn.Linear(256*self.n_elements + self.label_dim, 1000)),
+            nn.LeakyReLU(0.2, inplace =True),
+            utils.spectral_norm(nn.Linear(1000,200)),
+            nn.LeakyReLU(0.2, inplace = True)
         )
         self.output = nn.Sequential(
             utils.spectral_norm(nn.Linear(200,10))
@@ -116,10 +122,14 @@ class DistanceDiscriminator(nn.Module):
         self.n_label_features = n_label_features
         
         self.model = nn.Sequential(
-            utils.spectral_norm(nn.Conv2d(in_channels = 1, out_channels = 512, kernel_size = (1,3), stride = 1, padding = 0),nn.LeakyReLU(0.2, inplace=True)),
-            utils.spectral_norm(nn.Conv2d(in_channels = 512, out_channels = 512, kernel_size = (1,1), stride = 1, padding = 0),nn.LeakyReLU(0.2,inplace=True)),
-            utils.spectral_norm(nn.Conv2d(in_channels = 512, out_channels = 256, kernel_size= (1,1), stride = 1, padding = 0),nn.LeakyReLU(0.2,inplace=True))
+            utils.spectral_norm(nn.Conv2d(in_channels = 1, out_channels = 512, kernel_size = (1,3), stride = 1, padding = 0)),
+            nn.LeakyReLU(0.2, inplace=True),
+            utils.spectral_norm(nn.Conv2d(in_channels = 512, out_channels = 512, kernel_size = (1,1), stride = 1, padding = 0)),
+            nn.LeakyReLU(0.2,inplace=True),
+            utils.spectral_norm(nn.Conv2d(in_channels = 512, out_channels = 256, kernel_size= (1,1), stride = 1, padding = 0)),
+            nn.LeakyReLU(0.2,inplace=True)
             )
+        
         self.avgpool_elements = []
         for i in range(self.n_elements):
             self.avgpool_elements.append(nn.AvgPool2d(kernel_size = (self.n_atoms_elements[i],1)))
@@ -131,7 +141,10 @@ class DistanceDiscriminator(nn.Module):
         )
 
         self.feature_layer = nn.Sequential(
-            utils.spectral_norm(nn.Linear(256*self.n_elements + self.label_dim, 1000), nn.LeakyReLU(0.2, inplace =True), nn.Linear(1000,200),nn.LeakyReLU(0.2, inplace = True))
+            utils.spectral_norm(nn.Linear(256*self.n_elements + self.label_dim, 1000)),
+            nn.LeakyReLU(0.2, inplace =True),
+            utils.spectral_norm(nn.Linear(1000,200)),
+            nn.LeakyReLU(0.2, inplace = True)
         )
         self.output = nn.Sequential(
             utils.spectral_norm(nn.Linear(200,10))

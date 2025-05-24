@@ -435,6 +435,19 @@ def main():
                 G_cost.backward()
                 cost_gen.update(G_cost.detach().clone().item(), n=current_batch_size)
                 optimizer_G.step()
+                
+                total_norm = 0
+                for p in generator.parameters():
+                    if p.grad is not None:
+                        param_norm = p.grad.data.norm(2)
+                        total_norm += param_norm.item() ** 2
+                total_norm = total_norm ** 0.5
+                print(f"Generator gradient norm: {total_norm:.6f}")
+
+                # IF nan, end training
+                if torch.isnan(total_norm):
+                    print("Generator gradient norm is NaN. Ending training.")
+                    sys.exit(1)
             
             
             ## Measure batch completion time and print output

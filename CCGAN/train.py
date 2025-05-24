@@ -445,7 +445,7 @@ def main():
                 print(f"Generator gradient norm: {total_norm:.6f}")
 
                 # IF nan, end training
-                if torch.isnan(total_norm):
+                if total_norm != total_norm:
                     print("Generator gradient norm is NaN. Ending training.")
                     sys.exit(1)
             

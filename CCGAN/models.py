@@ -21,9 +21,9 @@ class Generator(nn.Module):
         
 
         self.l1 = nn.Sequential(nn.Linear(self.latent_dim + self.label_dim, self.gen_channels_1*self.n_atoms_total),nn.ReLU(True))
-        self.map1 = nn.Sequential(nn.ConvTranspose2d(self.gen_channels_1,256,(1,3),stride = 1,padding=0),nn.BatchNorm2d(256,0.8),nn.ReLU(True))
-        self.map2 = nn.Sequential(nn.ConvTranspose2d(256,512,(1,1),stride = 1,padding=0),nn.BatchNorm2d(512,0.8),nn.ReLU(True))
-        self.map3 = nn.Sequential(nn.ConvTranspose2d(512,256,(1,1),stride = 1,padding=0),nn.BatchNorm2d(256,0.8),nn.ReLU(True)) 
+        self.map1 = nn.Sequential(nn.ConvTranspose2d(self.gen_channels_1,256,(1,3),stride = 1,padding=0),)
+        self.map2 = nn.Sequential(nn.ConvTranspose2d(256,512,(1,1),stride = 1,padding=0),nn.ReLU(True))
+        self.map3 = nn.Sequential(nn.ConvTranspose2d(512,256,(1,1),stride = 1,padding=0),) 
         self.map4 = nn.Sequential(nn.ConvTranspose2d(256,1,(1,1),stride=1,padding=0)) 
         # self.sigmoid = nn.Sigmoid() # NOTE: Removed sigmoid activation for the generator output
 

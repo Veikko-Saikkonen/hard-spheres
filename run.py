@@ -22,9 +22,9 @@ def get_data_path(dataset_name):
     if dataset_name == "Sq":
         path = Path("data/raw/crystal/Sq")
     elif dataset_name == "Hex":
-        path = Path("../data/raw/crystal/Hex")
+        path = Path("data/raw/crystal/Hex")
     elif dataset_name == "Fullscale":
-        path = Path("../data/raw/crystal/Fullscale")
+        path = Path("data/raw/samples")
     else:
         raise ValueError(f"Unknown dataset name: {dataset_name}, please choose from 'Sq', 'Hex', 'Fullscale'")
     return path 
@@ -51,8 +51,8 @@ def get_box_parameters(dataset_name):
 
 
 def order_data(df):
-    """Order the data in the dataset by the time step"""
-    return df.sort_values(by="r", ignore_index=False)
+    """Order the data in the dataset by the type of atom (indicated by r)"""
+    return df.sort_values(by=["experiment", "sample", "r"], ignore_index=False)
 
 def load_data(experiment_file):
 
@@ -100,10 +100,11 @@ def run_experiment(experiment_file, run_name=None, experiment=""):
     print(f"data loaded, samples: {len(dataset)}")
 
     print("Creating models...")
+
     gan = GAN(
-    dataset, 
-    dataset,# No separate test set
-    **experiment_file
+        dataset, 
+        dataset,# No separate test set
+        **experiment_file
     )
 
     sample_x = dataset[0:32][0].cpu()#.transpose(-1,-2)

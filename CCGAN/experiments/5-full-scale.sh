@@ -43,7 +43,7 @@ python3 train.py\
         --n_save 20\
         --print_freq 5\
         --msave_freq 50\
-        --batch_size 64\
+        --batch_size 32\
         --msave_dir "${RESULTS_DIR}/"\
         --gsave_dir "${RESULTS_DIR}/"\
         --gen_channels_1 256\

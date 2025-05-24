@@ -5,7 +5,7 @@
 #SBATCH --output=5-full-scale.out
 #SBATCH --error=5-full-scale.err
 #SBATCH --partition=gpu
-#SBATCH --time=24:00:00
+#SBATCH --time=8:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --mem-per-cpu=8000

@@ -43,7 +43,7 @@ class Generator(nn.Module):
         h = self.map4(h)
         # pos = self.sigmoid(h) # NOTE: Removed sigmoid activation for the generator output
         
-        return pos  # torch.Size is (current_batch_size, 1, n_atoms_total, 3)
+        return h  # torch.Size is (current_batch_size, 1, n_atoms_total, 3)
 
 
 class CoordinateDiscriminator(nn.Module):

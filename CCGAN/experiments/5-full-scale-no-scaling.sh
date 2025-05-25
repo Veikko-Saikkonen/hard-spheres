@@ -1,9 +1,9 @@
 #!/bin/bash -l
 # Job name and output files
-#SBATCH --job-name=ccgan-training-5-full-scale
+#SBATCH --job-name=ccgan-training-5-full-scale-no-scaling
 #SBATCH --account=project_2010169
-#SBATCH --output=5-full-scale.out
-#SBATCH --error=5-full-scale.err
+#SBATCH --output=5-full-scale-no-scaling.out
+#SBATCH --error=5-full-scale-no-scaling.err
 #SBATCH --partition=gpu
 #SBATCH --time=8:00:00
 #SBATCH --ntasks=1
@@ -11,7 +11,7 @@
 #SBATCH --mem-per-cpu=8000
 #SBATCH --gres=gpu:v100:1
 
-EXPERIMENT_NAME="5-full-scale"
+EXPERIMENT_NAME="5-full-scale-no-scaling"
 echo "Entering experiment ${EXPERIMENT_NAME}..."
 
 if [ ! -d ".venv" ]; then

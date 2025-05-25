@@ -447,7 +447,7 @@ def main():
 
                 # IF nan, end training
                 if total_norm != total_norm:
-                    print("Generator gradient norm is NaN. Ending training.")
+                    print(f"Generator gradient norm is NaN ({total_norm}). Ending training.")
                     sys.exit(1)
             
             

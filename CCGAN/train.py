@@ -465,8 +465,8 @@ def main():
                     epoch, i, len(dataloader)-1, 
                     batch_time=batch_time, data_time_fake=data_time_fake,
                     w_dis=w_dis, mem_used=torch.cuda.max_memory_allocated()/2**30, 
+                    total_norm=total_norm,
                     mem_res=torch.cuda.max_memory_reserved()/2**30),
-                    total_norm=total_norm
                     )
 
             ## Store the fake coordinates that were generated (with the real labels). Only saves up to "n_save" fake structures. 

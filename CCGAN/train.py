@@ -334,6 +334,8 @@ def main():
         data_time_fake = AverageMeter()   # Stores the time for data of fake structures to complete prep
         batch_time = AverageMeter()  # Stores the time for batch to complete
         end = time.time()   # time stamp
+
+        total_norm = 0.0   # Stores the total norm of the generator gradients
         
         for i, (real_coords_with_dis, real_labels, lattices) in enumerate(dataloader):
             for p in coord_disc.parameters():
@@ -442,7 +444,6 @@ def main():
                         param_norm = p.grad.data.norm(2)
                         total_norm += param_norm.item() ** 2
                 total_norm = total_norm ** 0.5
-                print(f"Generator gradient norm: {total_norm:.6f}")
 
                 # IF nan, end training
                 if total_norm != total_norm:
@@ -459,11 +460,13 @@ def main():
                       'Fake data time {data_time_fake.val:.3f} ({data_time_fake.avg:.3f})\t'
                       'Distance {w_dis.val:.6f} ({w_dis.avg:.6f})\t'
                       'Memory used {mem_used:.3f}\t'
-                      'Memory reserved {mem_res:.3f}'.format(
+                      'Memory reserved {mem_res:.3f}'
+                      'Generator gradient norm: {total_norm:.6f}'.format(
                     epoch, i, len(dataloader)-1, 
                     batch_time=batch_time, data_time_fake=data_time_fake,
                     w_dis=w_dis, mem_used=torch.cuda.max_memory_allocated()/2**30, 
-                    mem_res=torch.cuda.max_memory_reserved()/2**30)
+                    mem_res=torch.cuda.max_memory_reserved()/2**30),
+                    total_norm=total_norm
                     )
 
             ## Store the fake coordinates that were generated (with the real labels). Only saves up to "n_save" fake structures. 

@@ -46,8 +46,8 @@ python3 train.py\
         --batch_size 32\
         --msave_dir "${RESULTS_DIR}/"\
         --gsave_dir "${RESULTS_DIR}/"\
-        --gen_channels_1 256\
-        --latent_dim 256\
+        --gen_channels_1 128\
+        --latent_dim 64\
         --gen_label_dim 128\
         --disc_label_dim 128\
         --weight_dist 0.2\

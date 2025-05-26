@@ -11,7 +11,7 @@
 #SBATCH --mem-per-cpu=8000
 #SBATCH --gres=gpu:v100:1
 
-EXPERIMENT_NAME="5-full-scale"
+EXPERIMENT_NAME="5-full-scale-continue"
 echo "Entering experiment ${EXPERIMENT_NAME}..."
 
 if [ ! -d ".venv" ]; then

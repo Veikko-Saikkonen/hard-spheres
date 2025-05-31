@@ -25,7 +25,7 @@ class Generator(nn.Module):
         self.map2 = nn.Sequential(nn.ConvTranspose2d(256,512,(1,1),stride = 1,padding=0),nn.BatchNorm2d(512,0.8),nn.ReLU(True))
         self.map3 = nn.Sequential(nn.ConvTranspose2d(512,256,(1,1),stride = 1,padding=0),nn.BatchNorm2d(256,0.8),nn.ReLU(True)) 
         self.map4 = nn.Sequential(nn.ConvTranspose2d(256,1,(1,1),stride=1,padding=0)) 
-        # self.sigmoid = nn.Sigmoid() # NOTE: Removed sigmoid activation for the generator output
+        self.sigmoid = nn.Sigmoid() # NOTE: Removed sigmoid activation for the generator output
 
     def forward(self, noise, labels):
 
@@ -41,9 +41,9 @@ class Generator(nn.Module):
         h = self.map2(h)
         h = self.map3(h)
         h = self.map4(h)
-        # pos = self.sigmoid(h) # NOTE: Removed sigmoid activation for the generator output
+        pos = self.sigmoid(h) # NOTE: Removed sigmoid activation for the generator output
         
-        return h  # torch.Size is (current_batch_size, 1, n_atoms_total, 3)
+        return pos  # torch.Size is (current_batch_size, 1, n_atoms_total, 3)
 
 
 class CoordinateDiscriminator(nn.Module):

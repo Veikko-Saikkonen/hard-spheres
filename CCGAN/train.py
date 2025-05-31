@@ -384,7 +384,7 @@ def main():
             D_fake = D_fake.mean()
             ## Feed fake distances into Distance Discriminator
             end_fake = time.time()   # time stamp for fake structures
-            fake_dataset = BatchDistance2DWithRadiifake_coords, n_neighbors=args.n_neighbors, lat_matrix=lattices)
+            fake_dataset = BatchDistance2DWithRadii(fake_coords, n_neighbors=args.n_neighbors, lat_matrix=lattices)
             fake_distances = fake_dataset.append_dist()[:,:,:,3:]
             data_time_fake.update(time.time() - end_fake)   # measure data prep time
             fake_dist_feature, D_dist_fake = dist_disc(fake_distances.detach(), real_labels.detach())
@@ -433,7 +433,7 @@ def main():
                 fake_feature_G, D_fake_G = coord_disc(fake_coords, real_labels)
                 D_fake_G = D_fake_G.mean()
                 ## Feed fake distances into Distance Discriminator
-                fake_dataset = BatchDistance2DWithRadiifake_coords, n_neighbors=args.n_neighbors, lat_matrix=lattices)
+                fake_dataset = BatchDistance2DWithRadii(fake_coords, n_neighbors=args.n_neighbors, lat_matrix=lattices)
                 fake_distances = fake_dataset.append_dist()[:,:,:,3:]
                 fake_dist_feature_G, D_dist_fake_G = dist_disc(fake_distances, real_labels)
                 D_dist_fake_G = D_dist_fake_G.mean()       

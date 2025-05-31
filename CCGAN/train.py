@@ -6,7 +6,7 @@ import torch
 from torch import autograd
 import torch.nn.init as init
 from models import Generator, CoordinateDiscriminator, DistanceDiscriminator
-from tools import BatchDistance2D
+from tools import BatchDistance2D, BatchDistance2DWithRadii
 import csv
 import sys
 import shutil
@@ -166,30 +166,35 @@ def main():
     n_atoms_elements = n_atoms_elements[np.argsort(idx)]   # Array of number of atoms per element in each structure
     train_coords_all = []   # Stores the fractional coordinates of all structures in ase_atoms
     train_lattices_all = []   # Stores the lattice vectors of all structures in ase_atoms
+    train_radii_all = []   # Stores the radii of all structures in ase_atoms
+    
     for i in range(len(ase_atoms)):
         # train_coords_all.append(ase_atoms[i].get_scaled_positions()) # NOTE: Make sure to scale your training data to the range of [0,1] before training
         train_coords_all.append(ase_atoms[i].get_positions()) # NOTE: Changed to unscaled positions to accommodate multiple datasets with different scales
         train_lattices_all.append(ase_atoms[i].get_cell()[:]) # NOTE: Make sure your cells are in the same scale
+        train_radii_all.append(ase_atoms[i].get_array["rmt"]) # NOTE: Make sure your radii are in the same scale
     train_coords_all = torch.FloatTensor(np.array(train_coords_all))
     train_lattices_all = torch.FloatTensor(np.array(train_lattices_all))
+    train_radii_all = torch.FloatTensor(np.array(train_radii_all))
 
     class PrepDataloader(torch.utils.data.Dataset):
-        def __init__(self, coords, lattices):
+        def __init__(self, coords, lattices, radii):
             self.coords = coords
             self.lattices = lattices
+            self.radii = radii
 
         def __len__(self):
             return len(self.coords)
 
         def __getitem__(self, idx):
-            return self.coords[idx], self.lattices[idx]
+            return self.coords[idx], self.lattices[idx], self.radii[idx]
 
     # Append bond distances to the coordinates
     print("Appending bond distances...")
-    prep_dataset = PrepDataloader(train_coords_all, train_lattices_all)
+    prep_dataset = PrepDataloader(train_coords_all, train_lattices_all, train_radii_all)
     prep_dataloader = torch.utils.data.DataLoader(prep_dataset, batch_size = 256, shuffle = False)
     train_data = []   # Stores the fractional coordinates and bond distances of all structures
-    for i, (batch_coords, batch_lattices) in enumerate(prep_dataloader):
+    for i, (batch_coords, batch_lattices, batch_radii) in enumerate(prep_dataloader):
         batch_coords = batch_coords.view(batch_coords.shape[0], 1, n_atoms_total, 3).float()
         lattices = batch_lattices
 
@@ -198,7 +203,8 @@ def main():
         elif mps:
             batch_coords = batch_coords.to(device='mps')
             
-        batch_dataset = BatchDistance2D(batch_coords, n_neighbors=args.n_neighbors, lat_matrix=lattices)
+        # batch_dataset = BatchDistance2D(batch_coords, n_neighbors=args.n_neighbors, lat_matrix=lattices)
+        batch_dataset = BatchDistance2DWithRadii(batch_coords, radii=batch_radii, n_neighbors=args.n_neighbors, lat_matrix=lattices)
         batch_coords_with_dist = batch_dataset.append_dist()
         train_data.append(batch_coords_with_dist.cpu())
     train_data = torch.cat(train_data)
@@ -378,7 +384,7 @@ def main():
             D_fake = D_fake.mean()
             ## Feed fake distances into Distance Discriminator
             end_fake = time.time()   # time stamp for fake structures
-            fake_dataset = BatchDistance2D(fake_coords, n_neighbors=args.n_neighbors, lat_matrix=lattices)
+            fake_dataset = BatchDistance2DWithRadiifake_coords, n_neighbors=args.n_neighbors, lat_matrix=lattices)
             fake_distances = fake_dataset.append_dist()[:,:,:,3:]
             data_time_fake.update(time.time() - end_fake)   # measure data prep time
             fake_dist_feature, D_dist_fake = dist_disc(fake_distances.detach(), real_labels.detach())
@@ -427,7 +433,7 @@ def main():
                 fake_feature_G, D_fake_G = coord_disc(fake_coords, real_labels)
                 D_fake_G = D_fake_G.mean()
                 ## Feed fake distances into Distance Discriminator
-                fake_dataset = BatchDistance2D(fake_coords, n_neighbors=args.n_neighbors, lat_matrix=lattices)
+                fake_dataset = BatchDistance2DWithRadiifake_coords, n_neighbors=args.n_neighbors, lat_matrix=lattices)
                 fake_distances = fake_dataset.append_dist()[:,:,:,3:]
                 fake_dist_feature_G, D_dist_fake_G = dist_disc(fake_distances, real_labels)
                 D_dist_fake_G = D_dist_fake_G.mean()       

@@ -39,20 +39,20 @@ mkdir -p "${RESULTS_DIR}"
 python3 train.py\
         --training_data ../data/processed/samples\
         --gen_int 5\
-        --gsave_freq 20\
+        --gsave_freq 5\
         --n_save 20\
         --print_freq 5\
         --msave_freq 50\
         --batch_size 128\
         --msave_dir "${RESULTS_DIR}/"\
         --gsave_dir "${RESULTS_DIR}/"\
-        --gen_channels_1 128\
-        --latent_dim 64\
+        --gen_channels_1 256\
+        --latent_dim 256\
         --gen_label_dim 128\
         --disc_label_dim 128\
         --weight_dist 0.2\
-        --g_lr 0.00005\
-        --coord_lr 0.00005\
-        --dist_lr 0.00005\
+        --g_lr 0.0005\
+        --coord_lr 0.0005\
+        --dist_lr 0.0005\
         --step_size 50\
         --gamma 0.90\

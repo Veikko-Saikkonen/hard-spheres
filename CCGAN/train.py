@@ -472,7 +472,7 @@ def main():
                       'Fake data time {data_time_fake.val:.3f} ({data_time_fake.avg:.3f})\t'
                       'Distance {w_dis.val:.6f} ({w_dis.avg:.6f})\t'
                       'Memory used {mem_used:.3f}\t'
-                      'Memory reserved {mem_res:.3f}'
+                      'Memory reserved {mem_res:.3f}\t'
                       'Generator gradient norm: {total_norm:.6f}'.format(
                     epoch, i, len(dataloader)-1, 
                     batch_time=batch_time, data_time_fake=data_time_fake,

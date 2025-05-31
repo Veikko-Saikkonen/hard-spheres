@@ -201,11 +201,9 @@ def main():
         if cuda:
             batch_coords = batch_coords.cuda()
             batch_radii = batch_radii.cuda()
-            batch_lattices = batch_lattices.cuda()
         elif mps:
             batch_coords = batch_coords.to(device='mps')
             batch_radii = batch_radii.to(device='mps')
-            batch_lattices = batch_lattices.to(device='mps')
             
         # batch_dataset = BatchDistance2D(batch_coords, n_neighbors=args.n_neighbors, lat_matrix=lattices)
         batch_dataset = BatchDistance2DWithRadii(batch_coords, radii=batch_radii, n_neighbors=args.n_neighbors, lat_matrix=lattices)
@@ -361,12 +359,10 @@ def main():
                 real_coords_with_dis = real_coords_with_dis.cuda()
                 real_labels = real_labels.cuda()
                 real_radii = real_radii.cuda()
-                lattices = lattices.cuda()
             elif mps:
                 real_coords_with_dis = real_coords_with_dis.to(device='mps')
                 real_labels = real_labels.to(device='mps')
                 real_radii = real_radii.to(device='mps')
-                lattices = lattices.to(device='mps')
 
             ## Prepare tensor of real distances
             real_coords = real_coords_with_dis[:,:,:,:3]

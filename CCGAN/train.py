@@ -200,8 +200,12 @@ def main():
 
         if cuda:
             batch_coords = batch_coords.cuda()
+            batch_radii = batch_radii.cuda()
+            batch_lattices = batch_lattices.cuda()
         elif mps:
             batch_coords = batch_coords.to(device='mps')
+            batch_radii = batch_radii.to(device='mps')
+            batch_lattices = batch_lattices.to(device='mps')
             
         # batch_dataset = BatchDistance2D(batch_coords, n_neighbors=args.n_neighbors, lat_matrix=lattices)
         batch_dataset = BatchDistance2DWithRadii(batch_coords, radii=batch_radii, n_neighbors=args.n_neighbors, lat_matrix=lattices)

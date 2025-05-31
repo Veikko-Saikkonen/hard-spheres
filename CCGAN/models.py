@@ -56,11 +56,11 @@ class CoordinateDiscriminator(nn.Module):
         
         self.model = nn.Sequential(
             nn.Conv2d(in_channels = 1, out_channels = 512, kernel_size = (1,3), stride = 1, padding = 0),
-            nn.ReLU(inplace=True),
+            nn.LeakyReLU(0.2,inplace=True),
             nn.Conv2d(in_channels = 512, out_channels = 512, kernel_size = (1,1), stride = 1, padding = 0),
-            nn.ReLU(inplace=True),
+            nn.LeakyReLU(0.2,inplace=True),
             nn.Conv2d(in_channels = 512, out_channels = 256, kernel_size= (1,1), stride = 1, padding = 0),
-            nn.ReLU(inplace=True)
+            nn.LeakyReLU(0.2,inplace=True),
             )
         
         self.avgpool_elements = []
@@ -73,14 +73,14 @@ class CoordinateDiscriminator(nn.Module):
         # Use a linear layer to project the label to the same dimension as the output
         self.label_proj = nn.Sequential(
             nn.Linear(self.n_label_features, self.label_dim),
-            nn.ReLU(inplace=True),
+            nn.LeakyReLU(0.2,inplace=True),
         )
 
         self.feature_layer = nn.Sequential(
             nn.Linear(256*self.n_elements + self.label_dim, 1000),
-            nn.ReLU(inplace=True),
+            nn.LeakyReLU(0.2,inplace=True),
             nn.Linear(1000,200),
-            nn.ReLU(inplace=True)
+            nn.LeakyReLU(0.2,inplace=True),
         )
         self.output = nn.Sequential(
             nn.Linear(200,10)
@@ -123,11 +123,11 @@ class DistanceDiscriminator(nn.Module):
         
         self.model = nn.Sequential(
             nn.Conv2d(in_channels = 1, out_channels = 512, kernel_size = (1,self.n_neighbors), stride = 1, padding = 0),
-            nn.ReLU(inplace=True),
+            nn.LeakyReLU(0.2,inplace=True),
             nn.Conv2d(in_channels = 512, out_channels = 512, kernel_size = (1,1), stride = 1, padding = 0),
-            nn.ReLU(inplace=True),
+            nn.LeakyReLU(0.2,inplace=True),
             nn.Conv2d(in_channels = 512, out_channels = 256, kernel_size= (1,1), stride = 1, padding = 0),
-            nn.ReLU(inplace=True)
+            nn.LeakyReLU(0.2,inplace=True),
             )
         
         self.avgpool_elements = []
@@ -137,14 +137,14 @@ class DistanceDiscriminator(nn.Module):
         # Use a linear layer to project the label to the same dimension as the output
         self.label_proj = nn.Sequential(
             nn.Linear(self.n_label_features, self.label_dim),
-            nn.ReLU(inplace=True),
+            nn.LeakyReLU(0.2,inplace=True),
         )
 
         self.feature_layer = nn.Sequential(
             nn.Linear(256*self.n_elements + self.label_dim, 1000),
-            nn.ReLU(inplace=True),
+            nn.LeakyReLU(0.2,inplace=True),
             nn.Linear(1000,200),
-            nn.ReLU(inplace=True)
+            nn.LeakyReLU(0.2,inplace=True),
         )
         self.output = nn.Sequential(
             nn.Linear(200,10)

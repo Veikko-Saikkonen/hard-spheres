@@ -360,9 +360,13 @@ def main():
             if cuda:
                 real_coords_with_dis = real_coords_with_dis.cuda()
                 real_labels = real_labels.cuda()
+                real_radii = real_radii.cuda()
+                lattices = lattices.cuda()
             elif mps:
                 real_coords_with_dis = real_coords_with_dis.to(device='mps')
                 real_labels = real_labels.to(device='mps')
+                real_radii = real_radii.to(device='mps')
+                lattices = lattices.to(device='mps')
 
             ## Prepare tensor of real distances
             real_coords = real_coords_with_dis[:,:,:,:3]

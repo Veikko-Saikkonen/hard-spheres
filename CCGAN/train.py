@@ -240,19 +240,20 @@ def main():
 
     # Create custom dataset that includes the labels
     class CustomDataset(torch.utils.data.Dataset):
-        def __init__(self, data, labels, lattices):
+        def __init__(self, data, labels, radii, lattices):
             self.data = data
             self.labels = labels
             self.lattices = lattices
+            self.radii = radii
 
         def __len__(self):
             return len(self.data)
 
         def __getitem__(self, idx):
-            return self.data[idx], self.labels[idx], self.lattices[idx]
+            return self.data[idx], self.labels[idx], self.radii[idx], self.lattices[idx]
     
     # Create the dataset
-    dataset = CustomDataset(train_data, train_labels, train_lattices_all)
+    dataset = CustomDataset(train_data, train_labels, train_radii_all, train_lattices_all)
     
     
     del ase_atoms, train_coords_all, prep_dataloader, batch_coords, batch_dataset, batch_coords_with_dist
@@ -348,7 +349,7 @@ def main():
 
         total_norm = 0.0   # Stores the total norm of the generator gradients
         
-        for i, (real_coords_with_dis, real_labels, lattices) in enumerate(dataloader):
+        for i, (real_coords_with_dis, real_labels, real_radii, lattices) in enumerate(dataloader):
             for p in coord_disc.parameters():
                 p.requires_grad = True
             for p in dist_disc.parameters():
@@ -388,7 +389,7 @@ def main():
             D_fake = D_fake.mean()
             ## Feed fake distances into Distance Discriminator
             end_fake = time.time()   # time stamp for fake structures
-            fake_dataset = BatchDistance2DWithRadii(fake_coords, n_neighbors=args.n_neighbors, lat_matrix=lattices)
+            fake_dataset = BatchDistance2DWithRadii(fake_coords, radii=real_radii, n_neighbors=args.n_neighbors, lat_matrix=lattices)
             fake_distances = fake_dataset.append_dist()[:,:,:,3:]
             data_time_fake.update(time.time() - end_fake)   # measure data prep time
             fake_dist_feature, D_dist_fake = dist_disc(fake_distances.detach(), real_labels.detach())
@@ -437,7 +438,7 @@ def main():
                 fake_feature_G, D_fake_G = coord_disc(fake_coords, real_labels)
                 D_fake_G = D_fake_G.mean()
                 ## Feed fake distances into Distance Discriminator
-                fake_dataset = BatchDistance2DWithRadii(fake_coords, n_neighbors=args.n_neighbors, lat_matrix=lattices)
+                fake_dataset = BatchDistance2DWithRadii(fake_coords, radii=real_radii, n_neighbors=args.n_neighbors, lat_matrix=lattices)
                 fake_distances = fake_dataset.append_dist()[:,:,:,3:]
                 fake_dist_feature_G, D_dist_fake_G = dist_disc(fake_distances, real_labels)
                 D_dist_fake_G = D_dist_fake_G.mean()       

@@ -172,7 +172,7 @@ def main():
         # train_coords_all.append(ase_atoms[i].get_scaled_positions()) # NOTE: Make sure to scale your training data to the range of [0,1] before training
         train_coords_all.append(ase_atoms[i].get_positions()) # NOTE: Changed to unscaled positions to accommodate multiple datasets with different scales
         train_lattices_all.append(ase_atoms[i].get_cell()[:]) # NOTE: Make sure your cells are in the same scale
-        train_radii_all.append(ase_atoms[i].get_array["rmt"]) # NOTE: Make sure your radii are in the same scale
+        train_radii_all.append(ase_atoms[i].get_array("rmt")) # NOTE: Make sure your radii are in the same scale
     train_coords_all = torch.FloatTensor(np.array(train_coords_all))
     train_lattices_all = torch.FloatTensor(np.array(train_lattices_all))
     train_radii_all = torch.FloatTensor(np.array(train_radii_all))

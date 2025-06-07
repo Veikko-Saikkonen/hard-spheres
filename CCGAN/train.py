@@ -113,6 +113,7 @@ def main():
     parser.add_argument('--weight_dist', type=float, help='weight of distance discriminator loss')
     parser.add_argument('--latent_dim', type=int, default=64, help='number of random numbers used for generator input')
     parser.add_argument('--gen_channels_1', type=int, default=128, help='number of channels after the first layer of the generator')
+    parser.add_argument('--disc_channels', type=int, default=128, help='number of channels after the first layer of the discriminator')
     parser.add_argument('--n_neighbors', type=int, default=6, help='number of nearest neighbors when calculating bond distances')
     parser.add_argument('--gen_int', type=int, default=5, help='interval between generator trainings, the generator is trained once every "gen_int" batches')
     parser.add_argument('--load_generator', type=str, default='', help='path to generator model to be loaded')
@@ -264,8 +265,8 @@ def main():
     # generator = Generator(args, n_atoms_total)
     generator = Generator(args, n_atoms_total, n_label_features=train_labels.shape[1], label_dim=args.gen_label_dim)
     # coord_disc = CoordinateDiscriminator(args, n_atoms_elements)
-    coord_disc = CoordinateDiscriminator(args, n_atoms_elements, n_label_features=train_labels.shape[1], label_dim=args.disc_label_dim)
-    dist_disc = DistanceDiscriminator(args, n_atoms_elements, n_label_features=train_labels.shape[1], label_dim=args.disc_label_dim)
+    coord_disc = CoordinateDiscriminator(args, n_atoms_elements, n_label_features=train_labels.shape[1], label_dim=args.disc_label_dim, disc_channels=args.disc_channels)
+    dist_disc = DistanceDiscriminator(args, n_atoms_elements, n_label_features=train_labels.shape[1], label_dim=args.disc_label_dim, disc_channels=args.disc_channels)
     if cuda:
         generator.cuda()
         coord_disc.cuda()

@@ -47,19 +47,20 @@ class Generator(nn.Module):
 
 
 class CoordinateDiscriminator(nn.Module):
-    def __init__(self, args, n_atoms_elements, n_label_features, label_dim):
+    def __init__(self, args, n_atoms_elements, n_label_features, label_dim, disc_channels=512):
         super(CoordinateDiscriminator, self).__init__()
         self.n_elements = len(n_atoms_elements)
         self.label_dim = label_dim
         self.n_label_features = n_label_features
         self.n_atoms_elements = n_atoms_elements
+        self.disc_channels = disc_channels
         
         self.model = nn.Sequential(
-            nn.Conv2d(in_channels = 1, out_channels = 512, kernel_size = (1,3), stride = 1, padding = 0),
+            nn.Conv2d(in_channels = 1, out_channels = self.disc_channels, kernel_size = (1,3), stride = 1, padding = 0),
             nn.LeakyReLU(0.2,inplace=True),
-            nn.Conv2d(in_channels = 512, out_channels = 512, kernel_size = (1,1), stride = 1, padding = 0),
+            nn.Conv2d(in_channels = self.disc_channels, out_channels = self.disc_channels, kernel_size = (1,1), stride = 1, padding = 0),
             nn.LeakyReLU(0.2,inplace=True),
-            nn.Conv2d(in_channels = 512, out_channels = 256, kernel_size= (1,1), stride = 1, padding = 0),
+            nn.Conv2d(in_channels = self.disc_channels, out_channels = 256, kernel_size= (1,1), stride = 1, padding = 0),
             nn.LeakyReLU(0.2,inplace=True),
             )
         
@@ -113,20 +114,21 @@ class CoordinateDiscriminator(nn.Module):
 
 
 class DistanceDiscriminator(nn.Module):
-    def __init__(self, args, n_atoms_elements, n_label_features, label_dim):
+    def __init__(self, args, n_atoms_elements, n_label_features, label_dim, disc_channels=512):
         super(DistanceDiscriminator, self).__init__()
         self.n_elements = len(n_atoms_elements)
         self.n_atoms_elements = n_atoms_elements
         self.n_neighbors = args.n_neighbors
         self.label_dim = label_dim
         self.n_label_features = n_label_features
+        self.disc_channels = disc_channels
         
         self.model = nn.Sequential(
-            nn.Conv2d(in_channels = 1, out_channels = 512, kernel_size = (1,self.n_neighbors), stride = 1, padding = 0),
+            nn.Conv2d(in_channels = 1, out_channels = self.disc_channels, kernel_size = (1,self.n_neighbors), stride = 1, padding = 0),
             nn.LeakyReLU(0.2,inplace=True),
-            nn.Conv2d(in_channels = 512, out_channels = 512, kernel_size = (1,1), stride = 1, padding = 0),
+            nn.Conv2d(in_channels = self.disc_channels, out_channels = self.disc_channels, kernel_size = (1,1), stride = 1, padding = 0),
             nn.LeakyReLU(0.2,inplace=True),
-            nn.Conv2d(in_channels = 512, out_channels = 256, kernel_size= (1,1), stride = 1, padding = 0),
+            nn.Conv2d(in_channels = self.disc_channels, out_channels = 256, kernel_size= (1,1), stride = 1, padding = 0),
             nn.LeakyReLU(0.2,inplace=True),
             )
         

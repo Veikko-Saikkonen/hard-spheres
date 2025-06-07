@@ -50,7 +50,7 @@ python3 train.py\
         --latent_dim 256\
         --gen_label_dim 128\
         --disc_label_dim 128\
-        --weight_dist 0.2\
+        --weight_dist 1.0\
         --g_lr 0.00005\
         --coord_lr 0.00005\
         --dist_lr 0.00005\
